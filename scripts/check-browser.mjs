@@ -21,7 +21,7 @@ mkdirSync(screenshotDirectory, { recursive: true });
 const show = (page, name) => page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage: true });
 
 try {
-  const desktop = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light" });
+  const desktop = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
   const staff = await desktop.newPage();
   await staff.goto(origin + "/registrieren");
   await staff.keyboard.press("Tab");
@@ -34,11 +34,11 @@ try {
   await staff.getByRole("button", { name: "Bewerbung starten" }).click();
   await staff.getByText("In Prüfung", { exact: true }).waitFor();
 
-  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", isMobile: true, deviceScaleFactor: 1, hasTouch: true });
+  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", isMobile: true, deviceScaleFactor: 1, hasTouch: true, locale: "de-DE" });
   await mobile.addCookies(await desktop.cookies());
   const staffMobile = await mobile.newPage();
 
-  const planning = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light" });
+  const planning = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
   const admin = await planning.newPage();
   await admin.goto(origin + "/anmelden");
   await admin.getByLabel("E-Mail-Adresse").fill("dispo@example.test");
@@ -78,21 +78,58 @@ try {
   await staff.goto(origin);
   await staff.getByText("Treffpunkt Tor 4", { exact: true }).waitFor();
   assert.match(await staff.locator(".overview").innerText(), /80,00\s€/);
+  await admin.getByText("Schicht hinzufügen", { exact: true }).click();
+  await admin.getByLabel("Schichtname").fill("Abbau");
+  await admin.getByLabel("Beginn").fill(future + "T18:00");
+  await admin.getByLabel("Ende").fill(future + "T20:00");
+  await admin.getByLabel("Vergütung pro Person in Euro").fill("45");
+  await admin.getByRole("button", { name: "Schichtentwurf speichern" }).click();
+  await admin.getByLabel("Veröffentlichen für").selectOption("invite");
+  await admin.getByRole("button", { name: "Schicht veröffentlichen" }).click();
+  const inviteButton = admin.getByRole("button", { name: "Poolmitglied einladen" });
+  await inviteButton.click();
+  const inviteDialog = admin.getByRole("dialog", { name: "Poolmitglied einladen" });
+  await inviteDialog.waitFor();
+  assert.equal(await inviteDialog.getByRole("combobox").evaluate(field => field === document.activeElement), true);
+  await admin.keyboard.press("Escape");
+  assert.equal(await inviteButton.evaluate(button => button === document.activeElement), true);
+  await inviteButton.click();
+  await inviteDialog.getByRole("button", { name: "Einladung im Portal bereitstellen" }).click();
+  await admin.getByText("Eingeladen: Mira Nord", { exact: true }).waitFor();
+  await staff.reload();
+  await staff.getByRole("heading", { name: "Stadtfest West · Abbau" }).waitFor();
   await show(staff, "personal-hell");
   await staff.emulateMedia({ colorScheme: "dark" });
   await show(staff, "personal-dunkel");
   await staffMobile.goto(origin);
   assert.equal(await staffMobile.evaluate(() => document.documentElement.scrollWidth === innerWidth), true);
+  for (const expected of ["Zum Inhalt", "Crew.", "Abmelden", "Menü"]) {
+    await staffMobile.keyboard.press("Tab");
+    assert.equal(await staffMobile.evaluate(() => document.activeElement.textContent.trim()), expected);
+  }
+  await staffMobile.locator("h1").click();
   await show(staffMobile, "personal-handy-dunkel");
   await staffMobile.emulateMedia({ colorScheme: "light" });
   await show(staffMobile, "personal-handy-hell");
+  await staffMobile.setViewportSize({ width: 360, height: 800 });
+  const estimate = staffMobile.locator(".overview strong").nth(1);
+  const amountFits = await estimate.evaluate(element => {
+    const actualAmount = element.textContent;
+    element.textContent = "10.000,00 €";
+    const bounds = document.createRange();
+    bounds.selectNodeContents(element);
+    const fits = bounds.getBoundingClientRect().width <= element.clientWidth;
+    element.textContent = actualAmount;
+    return fits;
+  });
+  assert.equal(amountFits, true);
   await show(admin, "dispo-hell");
   await admin.emulateMedia({ colorScheme: "dark" });
   await show(admin, "dispo-dunkel");
   await staffMobile.getByRole("button", { name: "Einsatz absagen" }).click();
   await staffMobile.getByText("Zurückgezogen", { exact: true }).waitFor();
   assert.match(await staffMobile.locator(".overview").innerText(), /0,00\s€/);
-  console.log("Browser: Bewerbung, Tastatur, Dispo, mobiles Menü, Pflichtfrage, Bestätigung, Vergütung, Absage und sechs Ansichten geprüft.");
+  console.log("Browser: Bewerbung, Tastatur, Einladungsdialog, Pflichtfrage, Bestätigung, Vergütung, Absage und sechs Ansichten geprüft.");
 } finally {
   await browser.close();
   app.close();

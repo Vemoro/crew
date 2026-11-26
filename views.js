@@ -26,7 +26,8 @@ function page(user, title, content) {
       : `<a href="/anmelden">Anmelden</a><a href="/registrieren">Registrieren</a>`;
   return `<!doctype html><html lang="de"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${esc(title)} · Crew</title><link rel="stylesheet" href="/crew.css"></head><body>
+    <title>${esc(title)} · Crew</title><link rel="stylesheet" href="/crew.css">
+    ${admin ? '<script src="/dialogs.js" type="module"></script>' : ""}</head><body>
     <a href="#inhalt" class="skip">Zum Inhalt</a>
     <header><div class="header-inner"><a class="brand" href="${admin ? "/dispo" : "/"}">Crew<span aria-hidden="true">.</span></a>
     <nav class="desktop-nav" aria-label="Hauptnavigation">${nav}</nav>
@@ -183,9 +184,15 @@ function planningShift(db, shift, staff, timezone) {
       + label("Veröffentlichen für", '<select name="visibility"><option value="pool">Aktiver Pool</option><option value="invite">Nur eingeladene Personen</option></select>')
       + button("Schicht veröffentlichen")) : ""}
     ${shift.visibility === "invite" && invitationNames.length ? `<p>Eingeladen: ${esc(invitationNames.map(row => row.name).join(", "))}</p>` : ""}
-    ${isUpcoming && shift.visibility === "invite" && invitations.length ? `<details><summary>Poolmitglied einladen</summary>${post("/dispo/einladen", hidden("shift", shift.id)
-      + label("Poolmitglied", `<select name="person">${invitations.map(person => `<option value="${person.id}">${esc(person.name)} · ${esc(person.email)}</option>`).join("")}</select>`)
-      + button("Einladung im Portal bereitstellen"))}</details>` : ""}
+    ${isUpcoming && shift.visibility === "invite" && invitations.length ? `<div class="secondary">
+      <button type="button" data-open-dialog="invite-${shift.id}">Poolmitglied einladen</button></div>
+      <dialog id="invite-${shift.id}" aria-labelledby="invite-title-${shift.id}">
+      <h3 id="invite-title-${shift.id}">Poolmitglied einladen</h3>
+      ${post("/dispo/einladen", hidden("shift", shift.id)
+        + label("Poolmitglied", `<select name="person" autofocus>${invitations.map(person => `<option value="${person.id}">${esc(person.name)} · ${esc(person.email)}</option>`).join("")}</select>`)
+        + `<div class="dialog-actions"><button class="quiet" type="submit" formmethod="dialog">Abbrechen</button>
+        ${button("Einladung im Portal bereitstellen")}</div>`)}
+      </dialog>` : ""}
     ${responses.length ? `<ul class="items">${responses.map(response => {
       const missing = missingQualifications(db, shift, response.person, "assign", timezone);
       const answers = JSON.parse(response.answers);

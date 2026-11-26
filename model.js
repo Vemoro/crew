@@ -13,9 +13,8 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite") {
   `);
   transaction(db, () => {
     const { user_version: version } = db.prepare("PRAGMA user_version").get();
-    if (version === 1) return;
-    if (version !== 0) throw new Error("Unbekannte Version der Crew-Datenbank.");
-    db.exec(`
+    if (version > 2) throw new Error("Unbekannte Version der Crew-Datenbank.");
+    if (version === 0) db.exec(`
     CREATE TABLE people (
       id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
       secret TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('staff','admin')),
@@ -50,12 +49,17 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite") {
     CREATE TABLE IF NOT EXISTS responses (
       shift INTEGER NOT NULL REFERENCES shifts(id), person INTEGER NOT NULL REFERENCES people(id),
       status TEXT NOT NULL CHECK(status IN ('interested','assigned','withdrawn')),
-      answers TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(shift, person)
+      answers TEXT NOT NULL, PRIMARY KEY(shift, person)
     );
     CREATE INDEX IF NOT EXISTS responses_person_status ON responses(person, status);
     CREATE INDEX IF NOT EXISTS invitations_person ON invitations(person);
     PRAGMA user_version = 1;
     `);
+    if (version < 2) {
+      const hasRevision = db.prepare("PRAGMA table_info(responses)").all().some(column => column.name === "revision");
+      if (!hasRevision) db.exec("ALTER TABLE responses ADD COLUMN revision INTEGER NOT NULL DEFAULT 1");
+      db.exec("PRAGMA user_version = 2");
+    }
   });
   return db;
 }

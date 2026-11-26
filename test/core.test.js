@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { missingQualifications, openDatabase, passwordHash } from "../model.js";
 import { createApp } from "../server.js";
@@ -150,4 +153,31 @@ test("Ein bis zum Schichttag gültiger Nachweis reicht bis zum exklusiven Ende u
   const afterMidnight = { requirements, ends: "2030-01-02T23:01:00.000Z" };
   assert.deepEqual(missingQualifications(db, atMidnight, 1, "assign", "Europe/Berlin"), []);
   assert.deepEqual(missingQualifications(db, afterMidnight, 1, "assign", "Europe/Berlin"), ["aufbau"]);
+});
+
+test("Ein bestehender Datenbestand erhält Bewerbungsrevisionen ohne Datenverlust", t => {
+  const directory = mkdtempSync(join(tmpdir(), "crew-schema-test-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, "crew.sqlite");
+  const original = openDatabase(path);
+  original.exec(`
+    ALTER TABLE responses DROP COLUMN revision;
+    PRAGMA user_version = 1;
+    INSERT INTO people (id,email,name,secret,role,status) VALUES (1,'mira@example.test','Mira','synthetic','staff','active');
+    INSERT INTO events (id,title,location) VALUES (1,'Stadtfest West','Musterhalle');
+    INSERT INTO shifts VALUES (1,1,'Aufbau','2030-01-02T13:00:00.000Z','2030-01-02T17:00:00.000Z',1,8000,'[]','[]','pool');
+    INSERT INTO responses (shift,person,status,answers) VALUES (1,1,'assigned','[]');
+  `);
+  original.close();
+  for (let run = 0; run < 2; run += 1) {
+    const migrated = openDatabase(path);
+    try {
+      const row = migrated.prepare("SELECT status, revision FROM responses WHERE shift=1 AND person=1").get();
+      assert.equal(row.status, "assigned");
+      assert.equal(row.revision, 1);
+      assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 2);
+    } finally {
+      migrated.close();
+    }
+  }
 });
