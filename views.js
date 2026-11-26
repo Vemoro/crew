@@ -241,19 +241,22 @@ function adminHome(db, user, timezone, failure) {
   const staff = db.prepare("SELECT id,name,email,status,availability,review_note FROM people WHERE role='staff' ORDER BY status='pending' DESC,name").all();
   const events = db.prepare("SELECT * FROM events ORDER BY id DESC").all();
   const shifts = db.prepare(shiftQuery + " ORDER BY s.starts").all();
-  const eventForm = post("/dispo/einsatz",
-    `<div class="form-grid">${label("Einsatzname", '<input name="title" required maxlength="120">')}
-    ${label("Ort", '<input name="location" required maxlength="180">')}</div>
-    ${label("Externe Referenz (optional)", '<input name="reference" maxlength="250">')}
-    ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000))}
+  const eventFailure = failure?.type === "event" ? failure : undefined;
+  const values = eventFailure?.form;
+  const eventForm = alert(eventFailure?.message) + post("/dispo/einsatz",
+    `<div class="form-grid">${label("Einsatzname", `<input name="title" required maxlength="120" value="${esc(values?.get("title"))}">`)}
+    ${label("Ort", `<input name="location" required maxlength="180" value="${esc(values?.get("location"))}">`)}</div>
+    ${label("Externe Referenz (optional)", `<input name="reference" maxlength="250" value="${esc(values?.get("reference"))}">`)}
+    ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000, values?.get("instructions")))}
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
-    ${failure ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.event ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${eventFailure ? '<p><a href="#neuer-einsatz">Zum Einsatzformular mit der Fehlermeldung</a></p>' : ""}
     <div class="overview"><div><span class="muted">Bewerbungen in Prüfung</span><strong>${staff.filter(p => p.status === "pending").length}</strong></div>
     <div><span class="muted">Aktive Poolmitglieder</span><strong>${staff.filter(p => p.status === "active").length}</strong></div></div>`
     + box("Personal", staff.length ? `<ul class="items">${staff.map(person => staffReview(db, person)).join("")}</ul>`
       : empty("Sobald sich jemand registriert, erscheint die Bewerbung hier."), "personal")
-    + box("Einsätze", `<details ${events.length ? "" : "open"}><summary>Einsatz anlegen</summary>${eventForm}</details>
+    + box("Einsätze", `<details id="neuer-einsatz" ${!events.length || eventFailure ? "open" : ""}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
       ${esc(event.location)}${event.reference ? " · " + esc(event.reference) : ""}</p>
       ${shiftForm(event, timezone, failure?.event === event.id ? failure : undefined)}
@@ -262,6 +265,9 @@ function adminHome(db, user, timezone, failure) {
 
 export function render(db, user, timezone, path, message, failure) {
   if (message && failure?.form) {
+    if (user?.role === "admin" && failure.path === "/dispo/einsatz") {
+      return adminHome(db, user, timezone, { type: "event", form: failure.form, message });
+    }
     if (user?.role === "admin" && failure.path === "/dispo/schicht") {
       const event = Number(failure.form.get("event"));
       if (Number.isSafeInteger(event) && db.prepare("SELECT 1 FROM events WHERE id=?").get(event)) {

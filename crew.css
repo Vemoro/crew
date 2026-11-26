@@ -130,5 +130,6 @@ header :focus-visible { outline-color: var(--nav-accent); }
   .overview { grid-template-columns: 1fr; }
 }
 @media (pointer: coarse) {
-  input, textarea, select, button { min-height: 44px; }
+  input, textarea, select, button, summary { min-height: 44px; }
+  summary { padding-block: 8px; }
 }

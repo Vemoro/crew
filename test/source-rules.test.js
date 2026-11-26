@@ -14,7 +14,9 @@ test("Codegröße und Abstandsraster unterscheiden Grenzwerte von gültigen Ausn
   const run = () => spawnSync(process.execPath, [check], { cwd, encoding: "utf8" });
   const write = (path, content) => writeFileSync(join(cwd, path), content);
   write("source.js", "// eine Zeile\n".repeat(400));
-  write("form.css", "main { gap: 8px; border: 1px solid; margin: auto } /* padding: 3px */");
+  write("form.css", `main { gap: 8px; border: 1px solid; margin: auto } /* padding: 3px */
+    main::after { content: "; gap: 6px"; --test: padding: 3px; }
+    @supports (gap: 3px) { main { gap: 4px } }`);
   mkdirSync(join(cwd, "test"));
   write("test/source.test.js", "// eine Testzeile\n".repeat(401));
   assert.equal(run().status, 0);

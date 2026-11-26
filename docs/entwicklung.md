@@ -16,7 +16,7 @@ Behandle gespeicherte Geldbeträge in ganzen Cent. Prüfe bei Schreibvorgängen 
 
 ### Codegröße und Aufräumen
 
-Eine Quelldatei hat einen fachlichen Schwerpunkt. Handgeschriebene JavaScript-, TypeScript- und CSS-Quelldateien bleiben bei höchstens 400 physischen Zeilen. Eine Funktion bleibt bei höchstens 80 Zeilen ohne Leerzeilen. Teile neue oder gewachsene Funktionen vor dem Merge entlang eines verständlichen Arbeitsschritts. Testdateien und der Browserprüflauf sind von den Codegrößenlimits ausgenommen. [Konventionen in Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/docs/entwicklung.md#konventionen)
+Eine Quelldatei hat einen fachlichen Schwerpunkt. Handgeschriebene JavaScript-, TypeScript- und CSS-Quelldateien bleiben bei höchstens 400 physischen Zeilen. Der Funktionsrumpf bleibt bei höchstens 80 Zeilen ohne Leerzeilen, gezählt nach Biomes Regel `noExcessiveLinesPerFunction`. Teile neue oder gewachsene Funktionen vor dem Merge entlang eines verständlichen Arbeitsschritts. Testdateien und der Browserprüflauf sind von den Codegrößenlimits ausgenommen. [Konventionen in Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/docs/entwicklung.md#konventionen)
 
 Räume überlange Funktionen, toten Code oder instabile Tests in den berührten Dateien auf, wenn das ohne größeren Umbau möglich ist. Ein Strukturumbau erhält bestehendes Verhalten. Nenne eine solche Änderung im PR. [Mitwirken bei Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/docs/mitwirken.md#automatische-prüfungen-der-regeln)
 
