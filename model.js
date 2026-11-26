@@ -119,9 +119,11 @@ export function resetPassword(db, email, password) {
   verifyPasswordLength(password);
   const secret = passwordHash(password);
   transaction(db, () => {
-    const updated = db.prepare("UPDATE people SET secret=? WHERE email=? RETURNING id").get(secret, email);
-    requireInput(updated, "Für diese Adresse existiert kein Konto.");
-    db.prepare("DELETE FROM sessions WHERE person=?").run(updated.id);
+    const person = db.prepare("SELECT id,secret FROM people WHERE email=?").get(email);
+    requireInput(person, "Für diese Adresse existiert kein Konto.");
+    requireInput(!checkPassword(password, person.secret), "Das neue Passwort muss sich vom bisherigen unterscheiden.");
+    db.prepare("UPDATE people SET secret=? WHERE id=?").run(secret, person.id);
+    db.prepare("DELETE FROM sessions WHERE person=?").run(person.id);
   });
 }
 

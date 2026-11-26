@@ -31,7 +31,7 @@ Setze `CREW_ADMIN_PASSWORD` vor der Kontoanlage wie oben beschrieben. Die Beispi
 
 Die Dispo öffnet das Profil eines aktiven Poolmitglieds und kann den Zugang dort sperren oder wieder freigeben. Eine Sperre beendet bestehende Sitzungen. Bevorstehende bestätigte Schichten bleiben reserviert und zeigen der Dispo den Prüfbedarf. Nach der Wiederfreigabe meldet sich die Person neu an.
 
-Betreiber mit Zugriff auf Crew und dessen Datenbank können ein verlorenes Passwort ersetzen. Setze `CREW_ADMIN_PASSWORD` für den Befehl auf das neue Passwort und entferne die Variable anschließend aus der Shell.
+Betreiber mit Zugriff auf Crew und dessen Datenbank können ein verlorenes Passwort ersetzen. Setze `CREW_ADMIN_PASSWORD` für den Befehl auf ein Passwort, das sich vom bisherigen unterscheidet, und entferne die Variable anschließend aus der Shell.
 
 ```sh
 docker compose run --rm -e CREW_ADMIN_PASSWORD crew node admin.js reset-password personal@example.test

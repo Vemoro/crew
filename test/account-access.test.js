@@ -78,6 +78,11 @@ test("Pool-Sperre und CLI-Passwortwiederherstellung widerrufen alte Sitzungen", 
   });
   assert.equal(invalid.status, 1);
   assert.match(invalid.stderr, /keine Zeilenumbrüche/);
+  const reused = spawnSync(process.execPath, [entrypoint, "reset-password", "mira@example.test"], {
+    env: { ...process.env, CREW_DB: database, CREW_ADMIN_PASSWORD: password }, encoding: "utf8",
+  });
+  assert.equal(reused.status, 1);
+  assert.match(reused.stderr, /muss sich vom bisherigen unterscheiden/);
   await request("/nachweis/1", { cookie: renewed });
 
   for (const email of ["mira@example.test", "dispo@example.test"]) {
