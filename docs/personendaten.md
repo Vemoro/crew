@@ -10,7 +10,7 @@ Wähle einen neuen Ordner innerhalb eines geschützten, bereits vorhandenen Verz
 node people-admin.js export mira@example.test /geschuetzt/crew-export/mira
 ```
 
-Bei Compose verwende nach `docker compose stop crew` ein zusätzliches Bind-Mount auf ein geschütztes Verzeichnis des Hosts. Das Dienstkonto aus dem Container muss dort schreiben können.
+Bei Compose verwende nach `docker compose stop crew` ein zusätzliches Bind-Mount auf ein geschütztes Verzeichnis des Hosts. Das Dienstkonto aus dem Container muss dort schreiben können. Führe die Befehle mit demselben Compose-Projekt wie der Dienst aus. Wenn du den Projektnamen mit `-p` gesetzt hast, gib ihn weiter an.
 
 ```sh
 docker compose run --rm --no-deps -v /geschuetzt/crew-export:/export crew node people-admin.js export mira@example.test /export/mira
@@ -20,12 +20,17 @@ Prüfe nach erfolgreichem Abschluss `profil.json` und die dort aufgeführten PDF
 
 ## Ein Profil bereinigen
 
-Wiederhole die Adresse zur Bestätigung. Die Vorprüfung zeigt laufende und zukünftige bestätigte Einteilungen mit Schicht-ID und Zeitfenster an. Warte bei laufenden Schichten das Ende ab. Kläre künftige Schichten mit der Dispo und gib die Plätze erforderlichenfalls vor der Bereinigung frei. Starte Crew dazu bei Bedarf erneut und halte es vor Wiederholung des Befehls wieder an.
+Ermittle zuerst die Profil-ID mit `inspect` und prüfe sie für die vorgesehene Adresse. Bestätige beim Löschen Adresse und Profil-ID. Bei erneuter Registrierung derselben Adresse schützt die neue ID das neue Profil vor einem wiederholten Löschbefehl. Die Vorprüfung zeigt laufende und zukünftige bestätigte Einteilungen mit Schicht-ID und Zeitfenster an. Warte bei laufenden Schichten das Ende ab. Kläre künftige Schichten mit der Dispo und gib die Plätze erforderlichenfalls vor der Bereinigung frei. Starte Crew dazu bei Bedarf erneut und halte es vor Wiederholung des Befehls wieder an.
 
 ```sh
-node people-admin.js erase mira@example.test mira@example.test
+node people-admin.js inspect mira@example.test
+# Ausgabe im Beispiel: Profil-ID: 3
+node people-admin.js erase mira@example.test 3
 # Alternativ in Compose nach docker compose stop crew
-docker compose run --rm --no-deps crew node people-admin.js erase mira@example.test mira@example.test
+docker compose run --rm --no-deps crew node people-admin.js inspect mira@example.test
+docker compose run --rm --no-deps crew node people-admin.js erase mira@example.test 3
 ```
 
 Die Bereinigung entfernt das Poolprofil, Einladungen, Bewerbungen und Antworten, Einteilungen, Nachforderungen, Nachweise und Sitzungen aus dem aktiven Bestand. Für alte Schichten bleibt die Anzahl der eingeteilten Plätze erhalten. Prüfe bei einem späteren Restore, welche Bereinigungen du erneut ausführen musst, bevor der Dienst zugänglich wird. Führe dafür eine zugriffsgeschützte betriebliche Aufzeichnung mit angemessener eigener Aufbewahrung. Plane alte Sicherungen, Exportkopien und Dateisystem-Snapshots mit ein. [Sicherung und Wiederanlauf](sicherung.md)
+
+Starte nach Abschluss den angehaltenen Dienst wieder. Unter Compose verwende `docker compose up -d crew` mit demselben Projektnamen.

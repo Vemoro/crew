@@ -1,4 +1,4 @@
-import { mkdirSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeEmail, openDatabase, requireInput, transaction } from "./model.js";
 
@@ -16,8 +16,9 @@ function exportPerson(db, email, destination) {
   const files = [];
   const write = (name, content) => {
     const path = join(destination, name);
+    const file = openSync(path, "wx", 0o600);
     files.push(path);
-    writeFileSync(path, content, { mode: 0o600, flag: "wx" });
+    try { writeFileSync(file, content); } finally { closeSync(file); }
   };
   try {
     transaction(db, () => {
@@ -53,10 +54,11 @@ function exportPerson(db, email, destination) {
   }
 }
 
-function erasePerson(db, email) {
+function erasePerson(db, email, confirmedId) {
   return transaction(db, () => {
     const person = profile(db, email);
     if (!person) return false;
+    requireInput(person.id === confirmedId, "Die Profil-ID stimmt nicht mit dem derzeitigen Konto überein.");
     const blocked = db.prepare(`SELECT s.id,s.starts,s.ends FROM shifts s
       JOIN responses r ON r.shift=s.id WHERE r.person=? AND r.status='assigned'
         AND s.cancelled_at IS NULL AND s.ends>? ORDER BY s.starts,s.id`).all(person.id, new Date().toISOString());
@@ -79,18 +81,25 @@ function erasePerson(db, email) {
 
 try {
   const [command, address, argument, ...rest] = process.argv.slice(2);
-  requireInput((command === "export" || command === "erase") && address && argument && rest.length === 0,
-    "Aufruf: node people-admin.js export EMAIL ZIELORDNER oder node people-admin.js erase EMAIL BESTÄTIGUNGSADRESSE");
+  const inspect = command === "inspect";
+  requireInput(address && rest.length === 0 && (inspect ? argument === undefined :
+    (command === "export" || command === "erase") && argument),
+  "Aufruf: node people-admin.js inspect EMAIL, export EMAIL ZIELORDNER oder erase EMAIL PROFIL-ID");
   const email = normalizeEmail(address);
-  if (command === "erase") requireInput(email === normalizeEmail(argument), "Die Bestätigungsadresse stimmt nicht überein.");
+  const confirmedId = Number(argument);
+  if (command === "erase") requireInput(/^[1-9]\d*$/.test(argument) && Number.isSafeInteger(confirmedId), "Profil-ID prüfen.");
   const db = openDatabase(undefined, { initialize: false });
   try {
-    if (command === "export") {
+    if (inspect) {
+      const person = profile(db, email);
+      requireInput(person, "Kein Poolprofil für diese Adresse vorhanden.");
+      console.log(`Profil-ID: ${person.id}`);
+    } else if (command === "export") {
       exportPerson(db, email, argument);
       console.log("Poolprofil und vorhandene Nachweise exportiert.");
     } else {
       db.exec("PRAGMA secure_delete = ON");
-      console.log(erasePerson(db, email) ? "Poolprofil und zugehörige Daten bereinigt." : "Kein Poolprofil vorhanden.");
+      console.log(erasePerson(db, email, confirmedId) ? "Poolprofil und zugehörige Daten bereinigt." : "Kein Poolprofil vorhanden.");
     }
   } finally {
     db.close();
