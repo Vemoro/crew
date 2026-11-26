@@ -40,7 +40,7 @@ unset CREW_ADMIN_PASSWORD
 
 Beim nativen Start verwende mit demselben Datenbankpfad `npm run admin -- reset-password personal@example.test`. Ein Passwortwechsel beendet die bestehenden Sitzungen. Wirksame Kontosperren bleiben bestehen.
 
-Dieser Crew-Stand migriert die Datenbank beim Start der Anwendung oder CLI auf Schema 3. Sichere den Ausgangsstand vor dem Update. Für eine Rückkehr zur älteren Crew-Version verwende eine separate Kopie der Vorupdate-Sicherung. [Sicherung und Wiederanlauf](sicherung.md)
+Dieser Crew-Stand migriert die Datenbank beim Start der Anwendung oder CLI auf Schema 6. Sichere den Ausgangsstand vor dem Update. Für eine Rückkehr zur älteren Crew-Version verwende eine separate Kopie der Vorupdate-Sicherung. [Sicherung und Wiederanlauf](sicherung.md)
 
 ## Adresse und Zeitzone
 
@@ -48,7 +48,7 @@ Der Dienst bindet lokal an `127.0.0.1:8080`. Setze `PORT` beim nativen Start ode
 
 `TZ` legt die Zeitzone für alle Schichten auf dieser Instanz fest. Der Standard ist `Europe/Berlin`. Die Dispo erfasst lokale Uhrzeiten, Crew speichert Schichtgrenzen in UTC. In der doppelt vorkommenden Stunde bei der Zeitumstellung verwendet die Eingabe das frühere Vorkommen.
 
-Betreibe Crew mit genau einer Anwendungsinstanz. Schütze Datenbank und Sicherungen durch passende Zugriffsrechte. [Sicherung und Wiederanlauf](sicherung.md)
+Betreibe Crew mit genau einer Anwendungsinstanz. Schütze Datenbank und Sicherungen durch passende Zugriffsrechte. [Sicherung und Wiederanlauf](sicherung.md) · [Personendaten exportieren und bereinigen](personendaten.md)
 
 ## HTTPS hinter einem Reverse-Proxy
 

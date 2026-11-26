@@ -15,7 +15,7 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite", {
   transaction(db, () => {
     const { user_version: version } = db.prepare("PRAGMA user_version").get();
     requireInput(initialize || version > 0, "Der Datenbestand wurde noch nicht als Crew-Datenbank eingerichtet.");
-    if (version > 5) throw new Error("Unbekannte Version der Crew-Datenbank.");
+    if (version > 6) throw new Error("Unbekannte Version der Crew-Datenbank.");
     if (version === 0) db.exec(`
     CREATE TABLE people (
       id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
@@ -86,6 +86,12 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite", {
       );
       PRAGMA user_version = 5;
     `);
+    if (version < 6) db.exec(`
+      ALTER TABLE shifts ADD COLUMN anonymous_assigned INTEGER NOT NULL DEFAULT 0 CHECK(anonymous_assigned >= 0);
+      CREATE TABLE erased_ids (kind TEXT PRIMARY KEY, greatest INTEGER NOT NULL);
+      INSERT INTO erased_ids VALUES ('people',0),('qualifications',0);
+      PRAGMA user_version = 6;
+    `);
   });
   return db;
 }
@@ -110,6 +116,11 @@ export function normalizeEmail(value) {
   requireInput(email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), "E-Mail-Adresse prüfen.");
   return email;
 }
+
+export const nextPersonId = `(SELECT max(coalesce((SELECT max(id) FROM people),0),greatest)+1
+  FROM erased_ids WHERE kind='people')`;
+export const nextQualificationId = `(SELECT max(coalesce((SELECT max(id) FROM qualifications),0),greatest)+1
+  FROM erased_ids WHERE kind='qualifications')`;
 
 export function verifyPasswordLength(password) {
   requireInput(password.length >= 12 && password.length <= 128, "Das Passwort braucht 12 bis 128 Zeichen.");
@@ -161,7 +172,7 @@ export function updatePoolAccess(db, person, revision, suspended) {
 export const shiftQuery = `
   SELECT s.*, e.title AS event_title, COALESCE(s.locked_location,e.location) AS location,
          COALESCE(s.locked_instructions,e.instructions) AS instructions,
-         (SELECT count(*) FROM responses r WHERE r.shift=s.id AND r.status='assigned') AS filled
+         s.anonymous_assigned + (SELECT count(*) FROM responses r WHERE r.shift=s.id AND r.status='assigned') AS filled
   FROM shifts s JOIN events e ON e.id=s.event
 `;
 

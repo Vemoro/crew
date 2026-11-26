@@ -1,4 +1,4 @@
-import { normalizeEmail, openDatabase, passwordHash, requireInput, resetPassword, verifyPasswordLength } from "./model.js";
+import { nextPersonId, normalizeEmail, openDatabase, passwordHash, requireInput, resetPassword, verifyPasswordLength } from "./model.js";
 
 try {
   const [, , command = "", argument] = process.argv;
@@ -17,7 +17,7 @@ try {
       const email = normalizeEmail(command);
       const name = (argument ?? "Crew Dispo").trim();
       requireInput(name.length > 0 && name.length <= 100, "Name prüfen.");
-      const result = db.prepare(`INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'admin','active')
+      const result = db.prepare(`INSERT INTO people (id,email,name,secret,role,status) VALUES (${nextPersonId},?,?,?,'admin','active')
         ON CONFLICT(email) DO NOTHING`).run(email, name, passwordHash(password));
       requireInput(result.changes === 1, "Für diese Adresse existiert bereits ein Konto.");
       console.log("Dispo-Konto angelegt.");
