@@ -33,16 +33,26 @@ jobs:
           npm ci
           npm run lint
       - name: Browser bereitstellen
-        run: npx playwright install --with-deps chromium
-      - name: Bedienung prüfen und Ansichten aufnehmen
+        run: npx playwright install --with-deps chromium webkit
+      - name: Bedienung in Chromium prüfen
         env:
           TZ: Europe/Berlin
+        run: npm run test:browser
+      - name: Bedienung in WebKit prüfen
+        env:
+          TZ: Europe/Berlin
+          CREW_BROWSER_ENGINE: webkit
         run: npm run test:browser
       - name: Ansichten bereitstellen
         uses: actions/upload-artifact@v4
         with:
           name: crew-ansichten
           path: build/screenshots/*.png
+      - name: WebKit-Ansichten bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: crew-ansichten-webkit
+          path: build/webkit/*.png
       - name: Container bauen
         run: docker build -t crew-ci .
       - name: Sicherung und Wiederherstellung prüfen
