@@ -1,6 +1,6 @@
 import { canSee, missingQualifications, shiftQuery } from "./model.js";
 import { button, esc, hidden, label, post, textarea } from "./forms.js";
-import { correctionForm, releasePlaceControl, withdrawShiftControl } from "./planning-controls.js";
+import { confirmation, correctionForm, releasePlaceControl, withdrawShiftControl } from "./planning-controls.js";
 
 const money = cents => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(cents / 100);
 const date = (value, timezone) => new Intl.DateTimeFormat("de-DE",
@@ -10,11 +10,12 @@ const empty = text => `<p class="muted">${text}</p>`;
 const statusLabel = { pending: "In Prüfung", active: "Im Pool", rejected: "Abgelehnt",
   interested: "Interesse gemeldet", assigned: "Eingeteilt", withdrawn: "Zurückgezogen",
   draft: "Entwurf", pool: "Im Pool sichtbar", invite: "Nur auf Einladung",
-  cancelled: "Schicht zurückgenommen", released: "Durch die Dispo freigegeben" };
-const statusTone = { pending: "warning", active: "ok", rejected: "danger", interested: "info", assigned: "ok", draft: "draft" };
+  cancelled: "Schicht zurückgenommen", released: "Durch die Dispo freigegeben", open: "Nachweis angefordert",
+  submitted: "In Prüfung", done: "Erledigt" };
+const statusTone = { pending: "warning", active: "ok", rejected: "danger", interested: "info", assigned: "ok",
+  draft: "draft", open: "warning", submitted: "info", done: "ok" };
 const status = state => `<span class="status ${statusTone[state] ?? "neutral"}"><span aria-hidden="true"></span>${statusLabel[state]}</span>`;
 const alert = message => message ? `<p class="form-error" role="alert">${esc(message)}</p>` : "";
-const requestState = { open: "Nachweis angefordert", submitted: "In Prüfung", done: "Erledigt" };
 
 function page(user, title, content, registrationOpen = true) {
   const admin = user?.role === "admin";
@@ -62,16 +63,22 @@ function qualificationList(db, person, admin = false) {
   return rows.length ? `<ul class="items">${rows.map(q => `<li><strong>${esc(q.name)}</strong>
     <span class="muted">${q.verified ? "Geprüft" : "Prüfung offen"}${q.valid_until ? " · Gültig bis " + esc(q.valid_until) : ""}</span>
     ${q.has_evidence ? `<a href="/nachweis/${q.id}">PDF herunterladen</a>` : ""}
-    ${admin ? post(q.verified ? "/dispo/nachweis-zuruecknehmen" : "/dispo/nachweis",
-      hidden("qualification", q.id) + hidden("revision", q.revision)
-      + button(q.verified ? "Prüfung zurücknehmen" : "Als geprüft markieren"), q.verified ? 'class="secondary"' : "") : ""}
+    ${admin ? qualificationReview(q) : ""}
     </li>`).join("")}</ul>` : empty("Noch keine Qualifikationen eingetragen.");
+}
+
+function qualificationReview(qualification) {
+  const fields = hidden("qualification", qualification.id) + hidden("revision", qualification.revision);
+  return qualification.verified ? confirmation(`revoke-${qualification.id}`, "Prüfung zurücknehmen", "Prüfung zurücknehmen?",
+    `„${esc(qualification.name)}“ gilt danach als ungeprüft. Neue Bewerbungen oder Einteilungen können dadurch gesperrt sein. Bestehende Zusagen bleiben erhalten.`,
+    "/dispo/nachweis-zuruecknehmen", fields, "Rücknahme bestätigen")
+    : post("/dispo/nachweis", fields + button("Als geprüft markieren"));
 }
 
 function qualificationRequests(db, person) {
   const entries = db.prepare("SELECT name,note,state FROM qualification_requests WHERE person=? ORDER BY state='done',name").all(person);
   return entries.length ? `<ul class="items">${entries.map(entry => `<li><strong>${esc(entry.name)}</strong>
-    <span class="muted">${requestState[entry.state]}</span><p class="preserve">${esc(entry.note)}</p></li>`).join("")}</ul>` : "";
+    ${status(entry.state)}<p class="preserve">${esc(entry.note)}</p></li>`).join("")}</ul>` : "";
 }
 
 function requestQualificationForm(person, failedForm) {

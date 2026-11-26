@@ -13,7 +13,7 @@ Das Projekt wird für die öffentliche Auslieferung ab Version 0.1.0.0 vorbereit
 
 Die Dispo kann Ort und Hinweise für zukünftige Schichten korrigieren, einzelne bestätigte Plätze wieder freigeben oder eine bevorstehende Schicht vollständig zurücknehmen. Vor einer Korrektur zeigt das Formular die betroffenen Schichten. Bereits begonnene, vergangene und zurückgenommene Schichten behalten ihre bisherigen Angaben. Änderungen an Zeit, Vergütung und Voraussetzungen benötigen eine neue Schicht.
 
-Die Dispo kann Prüfungen von Qualifikationen zurücknehmen und Nachweise als Aufgabe nachfordern. Bereits bestätigte Plätze bleiben reserviert. Die Dispo sieht, wenn sie eine solche Besetzung wegen fehlender Nachweise erneut prüfen muss.
+Die Dispo kann Prüfungen von Qualifikationen nach Bestätigung zurücknehmen und Nachweise als Aufgabe nachfordern. Eine Nachforderung für eine neue Qualifikation reserviert einen der bis zu 30 Plätze des Profils. Bereits bestätigte Plätze bleiben reserviert. Die Dispo sieht, wenn sie eine solche Besetzung wegen fehlender Nachweise erneut prüfen muss.
 
 Der erste Stand unterstützt pauschale Schichtvergütung und externe Einsatzreferenzen. Schnittstellen zu Desk und Haben, Ist-Zeiten, Abrechnungsbelege und Urlaub sind spätere Ausbaustufen.
 

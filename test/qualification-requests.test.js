@@ -61,4 +61,12 @@ test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehen
   await visit("/dispo/nachweis-zuruecknehmen", admin, { qualification: 1, revision: 1 }, 422);
   assert.match((await visit("/", mira)).html, /Erledigt[\s\S]+Bitte den neuen Nachweis/);
   assert.doesNotMatch((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise/);
+
+  const qualification = db.prepare("INSERT INTO qualifications (person,name) VALUES (2,?)");
+  for (let index = 1; index <= 28; index++) qualification.run(`synthetisch ${index}`);
+  await visit("/dispo/nachforderung", admin, { ...requested, name: "Reserviert" }, 303);
+  await visit("/qualifikation", mira, { name: "Anderes Thema" }, 422);
+  await visit("/dispo/nachforderung", admin, { ...requested, name: "Kein Platz" }, 422);
+  await visit("/qualifikation", mira, { name: "Reserviert" }, 303);
+  await visit("/dispo/nachforderung", admin, { ...requested, name: "Voll" }, 422);
 });
