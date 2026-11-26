@@ -243,13 +243,15 @@ try {
   const profileToggle = profile.locator(":scope > details > summary");
   await staff.getByLabel("Bezeichnung", { exact: true }).fill("Funkeinweisung");
   await staff.getByRole("button", { name: "Qualifikation einreichen" }).click();
+  await staff.getByText("funkeinweisung", { exact: true }).waitFor();
   await admin.reload();
   await profileToggle.press("Enter");
   const radioProof = profile.locator("li").filter({ has: admin.getByText("funkeinweisung", { exact: true }) });
   await radioProof.getByRole("button", { name: "Als geprüft markieren" }).press("Enter");
+  const revoke = radioProof.getByRole("button", { name: "Prüfung zurücknehmen" });
+  await radioProof.getByText("Geprüft", { exact: true }).waitFor({ state: "attached" });
   await profileToggle.press("Enter");
   await admin.setViewportSize({ width: 390, height: 844 });
-  const revoke = radioProof.getByRole("button", { name: "Prüfung zurücknehmen" });
   await revoke.press("Enter");
   const revokeDialog = admin.getByRole("dialog", { name: "Prüfung zurücknehmen?" });
   await revokeDialog.waitFor();
@@ -258,6 +260,7 @@ try {
   assert.equal(await revoke.evaluate(element => element === document.activeElement), true);
   await admin.keyboard.press("Enter");
   await revokeDialog.getByRole("button", { name: "Rücknahme bestätigen" }).press("Enter");
+  await radioProof.getByText("Prüfung offen", { exact: true }).waitFor({ state: "attached" });
 
   const requestToggle = profile.locator("summary").filter({ hasText: /^Nachweis anfordern$/ });
   await profileToggle.press("Enter");
