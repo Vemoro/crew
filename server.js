@@ -175,8 +175,20 @@ async function submitStaff({ db, user, token, path, form, timezone }) {
     return "/#bewerbungen";
   }
   if (path === "/absagen") {
-    db.prepare(`UPDATE responses SET status='withdrawn' WHERE shift=? AND person=?
-      AND EXISTS (SELECT 1 FROM shifts WHERE id=responses.shift AND starts>?)`).run(id(form, "shift"), user.id, new Date().toISOString());
+    const shift = id(form, "shift");
+    const revision = id(form, "revision");
+    const status = field(form, "status", 10);
+    requireInput(["interested", "assigned"].includes(status), "Antwortstatus prüfen.");
+    transaction(db, () => {
+      const updated = db.prepare(`UPDATE responses SET status='withdrawn'
+        WHERE shift=? AND person=? AND revision=? AND status=?
+        AND EXISTS (SELECT 1 FROM shifts WHERE id=responses.shift AND starts>?)`)
+        .run(shift, user.id, revision, status, new Date().toISOString());
+      if (updated.changes === 1) return;
+      const current = db.prepare("SELECT status, revision FROM responses WHERE shift=? AND person=?").get(shift, user.id);
+      requireInput(current?.status === "withdrawn" && current.revision === revision,
+        "Die Rückmeldung hat sich geändert oder die Schicht hat begonnen. Bitte prüfe den aktuellen Stand.");
+    });
     return "/#bewerbungen";
   }
   return null;

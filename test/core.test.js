@@ -107,7 +107,7 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422);
   await admin("/dispo/nachweis", { qualification: 2, revision: 1 }, 422);
   await admin("/dispo/nachweis", { qualification: 2, revision: 2 }, 303);
-  await mira("/absagen", { shift: 1 }, 303);
+  await mira("/absagen", { shift: 1, status: "interested", revision: 1 }, 303);
   await mira("/interesse", new URLSearchParams([["shift", "1"], ["answer", "Tor 6"], ["answer", "13:30"]]), 303);
   assert.match(await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422), /Bewerbung hat sich geändert/);
   assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>0,00\s€/);
@@ -123,7 +123,11 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
 
   await mira("/interesse", { shift: 3 }, 303);
   assert.match(await admin("/dispo/einteilen", { shift: 3, person: 2, revision: 1 }, 422), /zeitgleich/);
-  await mira("/absagen", { shift: 1 }, 303);
+  assert.match(await mira("/absagen", { shift: 1, status: "interested", revision: 2 }, 422), /Rückmeldung hat sich geändert/);
+  assert.match(await mira("/absagen", { shift: 1, status: "assigned", revision: 1 }, 422), /Rückmeldung hat sich geändert/);
+  assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>125,00\s€/);
+  await mira("/absagen", { shift: 1, status: "assigned", revision: 2 }, 303);
+  await mira("/absagen", { shift: 1, status: "assigned", revision: 2 }, 303);
   assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>45,00\s€/);
   assert.match(await admin("/dispo"), /0 von 1 Plätzen besetzt/);
   await leni("/interesse", { shift: 3 }, 303);

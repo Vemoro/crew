@@ -90,7 +90,7 @@ function shiftList(shifts, timezone, detail) {
     ${shiftFacts(shift, timezone)}${detail(shift)}</li>`).join("")}</ul>` : "";
 }
 
-function cancellation(shift) {
+function cancellation(shift, revision) {
   const title = "Einsatz absagen?";
   return `<div class="secondary">
     <button type="button" data-open-dialog="cancel-${shift.id}">Einsatz absagen</button></div>
@@ -98,7 +98,7 @@ function cancellation(shift) {
     <h3 id="cancel-title-${shift.id}">${title}</h3>
     <p><strong>${esc(shift.event_title)} · ${esc(shift.title)}</strong></p>
     <p id="cancel-effect-${shift.id}">Dein Platz wird wieder frei. Die Schicht entfällt aus deiner erwarteten Vergütung.</p>
-    ${post("/absagen", hidden("shift", shift.id) + `<div class="dialog-actions">
+    ${post("/absagen", hidden("shift", shift.id) + hidden("status", "assigned") + hidden("revision", revision) + `<div class="dialog-actions">
       <button class="quiet" type="submit" formmethod="dialog" autofocus>Abbrechen</button>
       <button class="danger" type="submit">Absage bestätigen</button></div>`)}
     </dialog>`;
@@ -123,27 +123,29 @@ function staffHome(db, user, timezone) {
   const now = new Date().toISOString();
   const responses = db.prepare(shiftQuery + ` JOIN responses r ON r.shift=s.id
     WHERE r.person=? ORDER BY s.starts`).all(user.id);
-  const responseState = new Map(db.prepare("SELECT shift, status FROM responses WHERE person=?").all(user.id)
-    .map(row => [row.shift, row.status]));
-  const upcoming = responses.filter(shift => shift.ends > now && responseState.get(shift.id) === "assigned");
+  const responsesByShift = new Map(db.prepare("SELECT shift, status, revision FROM responses WHERE person=?").all(user.id)
+    .map(response => [response.shift, response]));
+  const stateFor = shift => responsesByShift.get(shift.id)?.status;
+  const upcoming = responses.filter(shift => shift.ends > now && stateFor(shift) === "assigned");
   const open = db.prepare(shiftQuery + " WHERE s.starts>? AND s.visibility<>'draft' ORDER BY s.starts").all(now)
-    .filter(shift => canSee(db, shift, user.id) && !["assigned", "interested"].includes(responseState.get(shift.id)));
-  const interested = responses.filter(shift => responseState.get(shift.id) === "interested" && shift.starts > now);
+    .filter(shift => canSee(db, shift, user.id) && !["assigned", "interested"].includes(stateFor(shift)));
+  const interested = responses.filter(shift => stateFor(shift) === "interested" && shift.starts > now);
   const tasks = interested.flatMap(shift => missingQualifications(db, shift, user.id, "assign", timezone)
     .map(name => `<li>${esc(shift.title)} · ${esc(name)} prüfen lassen</li>`));
-  const abort = (shift, text) => shift.starts > now
-    ? post("/absagen", hidden("shift", shift.id) + button(text), 'class="secondary"') : "";
+  const withdraw = shift => shift.starts > now ? post("/absagen",
+    hidden("shift", shift.id) + hidden("status", "interested") + hidden("revision", responsesByShift.get(shift.id).revision)
+      + button("Interesse zurückziehen"), 'class="secondary"') : "";
   return page(user, "Meine Einsätze", heading
     + `<div class="overview"><div><span class="muted">Bevorstehende Schichten</span><strong>${upcoming.length}</strong></div>
     <div><span class="muted">Erwartete Vergütung</span><strong>${money(upcoming.reduce((sum, shift) => sum + shift.cents, 0))}</strong></div></div>`
     + box("Als Nächstes", shiftList(upcoming, timezone, shift =>
-      `<p class="preserve">${esc(shift.instructions)}</p>${shift.starts > now ? cancellation(shift) : ""}`) || empty("Du bist für keine bevorstehende Schicht eingeteilt."))
+      `<p class="preserve">${esc(shift.instructions)}</p>
+      ${shift.starts > now ? cancellation(shift, responsesByShift.get(shift.id).revision) : ""}`) || empty("Du bist für keine bevorstehende Schicht eingeteilt."))
     + box("Offene Schichten", shiftList(open, timezone, shift =>
       `<a href="/schichten/${shift.id}">${shift.filled >= shift.slots ? "Für die Nachbesetzung vormerken" : "Schicht ansehen"}</a>`)
       || empty("Zurzeit gibt es keine neuen Schichtangebote für dich."), "schichten")
     + box("Meine Rückmeldungen", shiftList(responses, timezone, shift =>
-      `<p>${status(responseState.get(shift.id))}</p>
-      ${responseState.get(shift.id) === "interested" ? abort(shift, "Interesse zurückziehen") : ""}`)
+      `<p>${status(stateFor(shift))}</p>${stateFor(shift) === "interested" ? withdraw(shift) : ""}`)
       || empty("Deine Bewerbungen und Zusagen erscheinen hier."), "bewerbungen")
     + box("Aufgaben", (user.review_note ? `<p>${esc(user.review_note)}</p>` : "")
       + (tasks.length ? `<ul>${tasks.join("")}</ul>` : empty("Für deine offenen Einsatzbewerbungen fehlen keine Qualifikationen.")))
