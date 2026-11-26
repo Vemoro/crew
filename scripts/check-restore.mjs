@@ -7,6 +7,7 @@ const name = "crew-restore-" + randomBytes(5).toString("hex");
 const source = name + "-source";
 const target = name + "-target";
 const broken = name + "-invalid";
+const fallback = name + "-fallback";
 const origin = "http://localhost:8080";
 const password = "synthetic-restore-password";
 const session = "7".repeat(64);
@@ -21,6 +22,9 @@ const compose = (project, args, input) => execFileSync("docker", composeArgs(pro
   ...composeOptions, input, stdio: ["pipe", "pipe", "pipe"],
 }).trim();
 const maintenance = (project, ...args) => compose(project, ["run", "--rm", "-T", "crew", "node", "admin.js", ...args]);
+const copySnapshot = project => compose(project, ["run", "--rm", "-T", "-v", `${source}_crew-data:/snapshot:ro`, "crew",
+  "sh", "-c", "cp -a /snapshot/. /app/data/"]);
+const sourceHash = () => compose(source, ["run", "--rm", "-T", "crew", "sha256sum", "/app/data/crew.sqlite"]);
 
 async function start(project) {
   compose(project, ["up", "-d"]);
@@ -54,6 +58,7 @@ async function verify(base) {
   const planning = await (await fetch(base + "/dispo", { headers: { Cookie: admin } })).text();
   assert.match(planning, /Stadtfest West/);
   assert.match(planning, /1 von 2 Plätzen besetzt/);
+  assert.match(planning, /0 von 1 Plätzen besetzt/);
   assert.match(planning, /Eingeladen: Mira Nord/);
   assert.match(planning, /Welcher Treffpunkt\?[\s\S]+Tor 4/);
   const personal = await (await fetch(base, { headers: { Cookie: staff } })).text();
@@ -65,7 +70,7 @@ async function verify(base) {
 }
 
 try {
-  for (const project of [source, target, broken]) compose(project, ["build"]);
+  for (const project of [source, target, broken, fallback]) compose(project, ["build"]);
   compose(source, ["run", "--rm", "-T", "crew", "node", "--input-type=module", "-"], `
     import { openDatabase, passwordHash, sessionHash } from './model.js';
     const db = openDatabase();
@@ -76,6 +81,8 @@ try {
     db.exec("INSERT INTO events (id,title,location) VALUES (1,'Stadtfest West','Musterhalle')");
     db.prepare("INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility) VALUES (1,1,'Aufbau',?,?,2,8000,'[]',?,'invite')")
       .run(new Date(Date.now()+86400000).toISOString(),new Date(Date.now()+100800000).toISOString(),JSON.stringify(['Welcher Treffpunkt?']));
+    db.prepare("INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility) VALUES (2,1,'Abbau',?,?,1,4500,'[]','[]','pool')")
+      .run(new Date(Date.now()+104400000).toISOString(),new Date(Date.now()+108000000).toISOString());
     db.prepare("INSERT INTO invitations VALUES (1,2)").run();
     db.prepare("INSERT INTO responses (shift,person,status,answers) VALUES (1,2,'assigned',?)").run(JSON.stringify(['Tor 4']));
     db.close();
@@ -87,8 +94,7 @@ try {
   await verify(sourceBase);
   compose(source, ["stop", "crew"]);
 
-  compose(target, ["run", "--rm", "-T", "-v", `${source}_crew-data:/snapshot:ro`, "crew",
-    "sh", "-c", "cp -a /snapshot/. /app/data/"]);
+  for (const project of [target, broken, fallback]) copySnapshot(project);
   const liveSource = await start(source);
   const logout = await fetch(liveSource + "/abmelden", { method: "POST", redirect: "manual",
     headers: { ...oldCookie, Origin: origin }, body: new URLSearchParams() });
@@ -98,19 +104,25 @@ try {
   assert.equal((await fetch(targetBase + "/nachweis/1", { headers: oldCookie })).status, 404);
   await verify(targetBase);
 
-  compose(broken, ["run", "--rm", "-T", "crew", "sh", "-c", "printf 'invalid sqlite fixture' > /app/data/crew.sqlite"]);
+  compose(source, ["stop", "crew"]);
+  const beforeFailure = sourceHash();
+  compose(broken, ["run", "--rm", "-T", "crew", "truncate", "-s", "512", "/app/data/crew.sqlite"]);
   const failed = spawnSync("docker", composeArgs(broken, ["run", "--rm", "-T", "crew", "node", "admin.js", "invalidate-sessions"]), composeOptions);
   assert.equal(failed.error, undefined);
   assert.notEqual(failed.status, 0, "Eine beschädigte Datenbank darf nicht als bereit gemeldet werden.");
-  assert.match(failed.stderr, /file is not a database/);
-  compose(source, ["stop", "crew"]);
+  assert.match(failed.stderr, /file is not a database|database disk image is malformed/);
+  assert.equal(sourceHash(), beforeFailure);
   const recoveredSource = await start(source);
   assert.equal((await fetch(recoveredSource + "/nachweis/1", { headers: oldCookie })).status, 404);
   assert.equal((await fetch(recoveredSource + "/nachweis/1", { headers: untouchedCookie })).status, 200);
   await verify(recoveredSource);
+  maintenance(fallback, "invalidate-sessions");
+  await verify(await start(fallback));
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   console.log("Compose-Restore: Sitzungen, Konten, PDF, Einladungen, Rückmeldungen und Besetzung geprüft.");
+  console.log(`Quellstand ${commit}, Laufzeitimage ${compose(source, ["images", "-q", "crew"])}.`);
 } finally {
-  for (const project of [target, broken, source]) {
+  for (const project of [target, broken, fallback, source]) {
     spawnSync("docker", composeArgs(project, ["down", "-v", "--remove-orphans"]), composeOptions);
   }
 }
