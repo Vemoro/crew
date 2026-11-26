@@ -4,7 +4,7 @@ Crew läuft als einzelner Node.js-Dienst und speichert seine Daten in SQLite. F�
 
 ## Docker Compose
 
-Setze `CREW_ADMIN_PASSWORD` in der Umgebung deiner Shell auf ein eigenes Passwort mit 12 bis 128 Zeichen. Entferne die Variable nach der Kontoanlage wieder aus der Shell.
+Setze `CREW_ADMIN_PASSWORD` in der Umgebung deiner Shell auf ein eigenes Passwort mit 12 bis 128 Zeichen ohne Zeilenumbrüche. Entferne die Variable nach der Kontoanlage wieder aus der Shell.
 
 ```sh
 docker compose build
@@ -26,6 +26,21 @@ npm start
 ```
 
 Setze `CREW_ADMIN_PASSWORD` vor der Kontoanlage wie oben beschrieben. Die Beispiele verwenden eine POSIX-Shell. In PowerShell entfernst du die Variable mit `Remove-Item Env:CREW_ADMIN_PASSWORD`. Standardmäßig liegt der Datenbestand unter `data/crew.sqlite`. `CREW_DB` legt einen anderen Datenbankpfad fest. `npm test` prüft den HTTP-Ablauf in einer isolierten In-Memory-Datenbank.
+
+## Zugang sperren oder wiederherstellen
+
+Die Dispo öffnet das Profil eines aktiven Poolmitglieds und kann den Zugang dort sperren oder wieder freigeben. Eine Sperre beendet bestehende Sitzungen. Bevorstehende bestätigte Schichten bleiben reserviert und zeigen der Dispo den Prüfbedarf. Nach der Wiederfreigabe meldet sich die Person neu an.
+
+Betreiber mit Zugriff auf Crew und dessen Datenbank können ein verlorenes Passwort ersetzen. Setze `CREW_ADMIN_PASSWORD` für den Befehl auf ein Passwort, das sich vom bisherigen unterscheidet, und entferne die Variable anschließend aus der Shell.
+
+```sh
+docker compose run --rm -e CREW_ADMIN_PASSWORD crew node admin.js reset-password personal@example.test
+unset CREW_ADMIN_PASSWORD
+```
+
+Beim nativen Start verwende mit demselben Datenbankpfad `npm run admin -- reset-password personal@example.test`. Ein Passwortwechsel beendet die bestehenden Sitzungen. Wirksame Kontosperren bleiben bestehen.
+
+Dieser Crew-Stand migriert die Datenbank beim Start der Anwendung oder CLI auf Schema 3. Sichere den Ausgangsstand vor dem Update. Für eine Rückkehr zur älteren Crew-Version verwende eine separate Kopie der Vorupdate-Sicherung. [Sicherung und Wiederanlauf](sicherung.md)
 
 ## Adresse und Zeitzone
 

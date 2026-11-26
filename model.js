@@ -13,7 +13,7 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite") {
   `);
   transaction(db, () => {
     const { user_version: version } = db.prepare("PRAGMA user_version").get();
-    if (version > 2) throw new Error("Unbekannte Version der Crew-Datenbank.");
+    if (version > 3) throw new Error("Unbekannte Version der Crew-Datenbank.");
     if (version === 0) db.exec(`
     CREATE TABLE people (
       id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
@@ -60,6 +60,11 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite") {
       if (!hasRevision) db.exec("ALTER TABLE responses ADD COLUMN revision INTEGER NOT NULL DEFAULT 1");
       db.exec("PRAGMA user_version = 2");
     }
+    if (version < 3) db.exec(`
+      ALTER TABLE people ADD COLUMN access_suspended INTEGER NOT NULL DEFAULT 0 CHECK(access_suspended IN (0,1));
+      ALTER TABLE people ADD COLUMN access_revision INTEGER NOT NULL DEFAULT 1;
+      PRAGMA user_version = 3;
+    `);
   });
   return db;
 }
@@ -87,6 +92,7 @@ export function normalizeEmail(value) {
 
 export function verifyPasswordLength(password) {
   requireInput(password.length >= 12 && password.length <= 128, "Das Passwort braucht 12 bis 128 Zeichen.");
+  requireInput(!/[\r\n]/.test(password), "Das Passwort darf keine Zeilenumbrüche enthalten.");
 }
 
 export function qualificationName(value) {
@@ -107,6 +113,28 @@ export function transaction(db, execute) {
     db.exec("ROLLBACK");
     throw error;
   }
+}
+
+export function resetPassword(db, email, password) {
+  verifyPasswordLength(password);
+  const secret = passwordHash(password);
+  transaction(db, () => {
+    const person = db.prepare("SELECT id,secret FROM people WHERE email=?").get(email);
+    requireInput(person, "Für diese Adresse existiert kein Konto.");
+    requireInput(!checkPassword(password, person.secret), "Das neue Passwort muss sich vom bisherigen unterscheiden.");
+    db.prepare("UPDATE people SET secret=? WHERE id=?").run(secret, person.id);
+    db.prepare("DELETE FROM sessions WHERE person=?").run(person.id);
+  });
+}
+
+export function updatePoolAccess(db, person, revision, suspended) {
+  transaction(db, () => {
+    const result = db.prepare(`UPDATE people SET access_suspended=?, access_revision=access_revision+1
+      WHERE id=? AND role='staff' AND status='active' AND access_revision=? AND access_suspended<>?`)
+      .run(suspended, person, revision, suspended);
+    requireInput(result.changes === 1, "Der Kontozugang hat sich geändert oder das Konto ist kein aktives Poolmitglied.");
+    db.prepare("DELETE FROM sessions WHERE person=?").run(person);
+  });
 }
 
 export const shiftQuery = `
@@ -151,11 +179,11 @@ export function respond(db, shiftId, person, answers, timezone) {
 export function assign(db, shiftId, person, revision, timezone) {
   transaction(db, () => {
     const shift = db.prepare(shiftQuery + " WHERE s.id=?").get(shiftId);
-    const response = db.prepare(`SELECT r.status, r.revision, p.status AS person_status
+    const response = db.prepare(`SELECT r.status, r.revision, p.status AS person_status, p.access_suspended
       FROM responses r JOIN people p ON p.id=r.person WHERE r.shift=? AND r.person=?`).get(shiftId, person);
     requireInput(response?.revision === revision, "Die Bewerbung hat sich geändert. Bitte prüfe die aktuelle Rückmeldung.");
     if (response?.status === "assigned") return;
-    requireInput(shift && response?.status === "interested" && response.person_status === "active"
+    requireInput(shift && response?.status === "interested" && response.person_status === "active" && !response.access_suspended
       && canSee(db, shift, person), "Es liegt keine gültige Einsatzbewerbung vor.");
     requireInput(shift.starts > new Date().toISOString(), "Die Schicht hat bereits begonnen.");
     requireInput(shift.filled < shift.slots, "Alle Plätze sind bereits besetzt.");
