@@ -15,7 +15,7 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite", {
   transaction(db, () => {
     const { user_version: version } = db.prepare("PRAGMA user_version").get();
     requireInput(initialize || version > 0, "Der Datenbestand wurde noch nicht als Crew-Datenbank eingerichtet.");
-    if (version > 4) throw new Error("Unbekannte Version der Crew-Datenbank.");
+    if (version > 5) throw new Error("Unbekannte Version der Crew-Datenbank.");
     if (version === 0) db.exec(`
     CREATE TABLE people (
       id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
@@ -75,6 +75,16 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite", {
       ALTER TABLE shifts ADD COLUMN placement_revision INTEGER NOT NULL DEFAULT 1;
       ALTER TABLE responses ADD COLUMN released_by_dispo INTEGER NOT NULL DEFAULT 0 CHECK(released_by_dispo IN (0,1));
       PRAGMA user_version = 4;
+    `);
+    if (version < 5) db.exec(`
+      CREATE TABLE qualification_requests (
+        person INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        note TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(state IN ('open','submitted','done')),
+        PRIMARY KEY(person,name)
+      );
+      PRAGMA user_version = 5;
     `);
   });
   return db;

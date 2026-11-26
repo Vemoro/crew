@@ -1,6 +1,6 @@
 import { canSee, missingQualifications, shiftQuery } from "./model.js";
 import { button, esc, hidden, label, post, textarea } from "./forms.js";
-import { correctionForm, releasePlaceControl, withdrawShiftControl } from "./planning-controls.js";
+import { confirmation, correctionForm, releasePlaceControl, withdrawShiftControl } from "./planning-controls.js";
 
 const money = cents => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(cents / 100);
 const date = (value, timezone) => new Intl.DateTimeFormat("de-DE",
@@ -10,8 +10,10 @@ const empty = text => `<p class="muted">${text}</p>`;
 const statusLabel = { pending: "In Prüfung", active: "Im Pool", rejected: "Abgelehnt",
   interested: "Interesse gemeldet", assigned: "Eingeteilt", withdrawn: "Zurückgezogen",
   draft: "Entwurf", pool: "Im Pool sichtbar", invite: "Nur auf Einladung",
-  cancelled: "Schicht zurückgenommen", released: "Durch die Dispo freigegeben" };
-const statusTone = { pending: "warning", active: "ok", rejected: "danger", interested: "info", assigned: "ok", draft: "draft" };
+  cancelled: "Schicht zurückgenommen", released: "Durch die Dispo freigegeben", open: "Nachweis angefordert",
+  submitted: "In Prüfung", done: "Erledigt" };
+const statusTone = { pending: "warning", active: "ok", rejected: "danger", interested: "info", assigned: "ok",
+  draft: "draft", open: "warning", submitted: "info", done: "ok" };
 const status = state => `<span class="status ${statusTone[state] ?? "neutral"}"><span aria-hidden="true"></span>${statusLabel[state]}</span>`;
 const alert = message => message ? `<p class="form-error" role="alert">${esc(message)}</p>` : "";
 
@@ -61,9 +63,29 @@ function qualificationList(db, person, admin = false) {
   return rows.length ? `<ul class="items">${rows.map(q => `<li><strong>${esc(q.name)}</strong>
     <span class="muted">${q.verified ? "Geprüft" : "Prüfung offen"}${q.valid_until ? " · Gültig bis " + esc(q.valid_until) : ""}</span>
     ${q.has_evidence ? `<a href="/nachweis/${q.id}">PDF herunterladen</a>` : ""}
-    ${admin && !q.verified ? post("/dispo/nachweis", hidden("qualification", q.id) + hidden("revision", q.revision)
-      + button("Als geprüft markieren")) : ""}
+    ${admin ? qualificationReview(q) : ""}
     </li>`).join("")}</ul>` : empty("Noch keine Qualifikationen eingetragen.");
+}
+
+function qualificationReview(qualification) {
+  const fields = hidden("qualification", qualification.id) + hidden("revision", qualification.revision);
+  return qualification.verified ? confirmation(`revoke-${qualification.id}`, "Prüfung zurücknehmen", "Prüfung zurücknehmen?",
+    `„${esc(qualification.name)}“ gilt danach als ungeprüft. Neue Bewerbungen oder Einteilungen können dadurch gesperrt sein. Bestehende Zusagen bleiben erhalten.`,
+    "/dispo/nachweis-zuruecknehmen", fields, "Rücknahme bestätigen")
+    : post("/dispo/nachweis", fields + button("Als geprüft markieren"));
+}
+
+function qualificationRequests(db, person) {
+  const entries = db.prepare("SELECT name,note,state FROM qualification_requests WHERE person=? ORDER BY state='done',name").all(person);
+  return entries.length ? `<ul class="items">${entries.map(entry => `<li><strong>${esc(entry.name)}</strong>
+    ${status(entry.state)}<p class="preserve">${esc(entry.note)}</p></li>`).join("")}</ul>` : "";
+}
+
+function requestQualificationForm(person, failedForm) {
+  return `<details ${failedForm ? "open" : ""}><summary>Nachweis anfordern</summary>${post("/dispo/nachforderung", hidden("person", person.id)
+    + label("Bezeichnung (wie im Personalnachweis)", `<input name="name" maxlength="100" required value="${esc(failedForm?.get("name"))}">`)
+    + label("Anforderung für das Personalportal", textarea("note", 1000, failedForm?.get("note"), true))
+    + button("Nachweis anfordern"))}</details>`;
 }
 
 export function renderEvidence(db, res, user, id) {
@@ -148,7 +170,7 @@ function staffHome(db, user, timezone) {
     + box("Meine Rückmeldungen", shiftList([...responses, ...cancelledInvites], timezone, shift =>
       `<p>${status(stateFor(shift))}</p>${stateFor(shift) === "interested" ? withdraw(shift) : ""}`)
       || empty("Deine Bewerbungen und Zusagen erscheinen hier."), "bewerbungen")
-    + box("Aufgaben", (user.review_note ? `<p>${esc(user.review_note)}</p>` : "")
+    + box("Aufgaben", qualificationRequests(db, user.id) + (user.review_note ? `<p>${esc(user.review_note)}</p>` : "")
       + (tasks.length ? `<ul>${tasks.join("")}</ul>` : empty("Für deine offenen Einsatzbewerbungen fehlen keine Qualifikationen.")))
     + profile);
 }
@@ -197,6 +219,8 @@ function staffReview(db, person, failure) {
     ${alert(failure?.message)}
     <p>${esc(person.email)}</p><p class="preserve">${esc(person.availability || "Keine typische Verfügbarkeit hinterlegt.")}</p>
     ${qualificationList(db, person.id, true)}
+    ${qualificationRequests(db, person.id)}
+    ${person.status === "active" && !person.access_suspended ? requestQualificationForm(person, failure?.requestForm) : ""}
     ${person.status !== "active" ? post("/dispo/freigabe", hidden("person", person.id)
       + label("Rückmeldung an die Person (optional)", textarea("note", 1000, person.review_note))
       + label("Entscheidung", `<select name="status"><option value="pending">In Prüfung belassen</option>
@@ -209,7 +233,9 @@ function planningShift(db, shift, staff, timezone, failure) {
     WHERE r.shift=? ORDER BY CASE r.status WHEN 'assigned' THEN 0 WHEN 'interested' THEN 1 ELSE 2 END, p.name`).all(shift.id);
   const questions = JSON.parse(shift.questions);
   const requirements = JSON.parse(shift.requirements);
-  const isUpcoming = shift.starts > new Date().toISOString() && !shift.cancelled_at;
+  const now = new Date().toISOString();
+  const isUpcoming = shift.starts > now && !shift.cancelled_at;
+  const needsQualification = shift.ends > now && !shift.cancelled_at;
   const invitations = staff.filter(person => person.status === "active" && !person.access_suspended);
   const invitationNames = db.prepare(`SELECT p.name FROM invitations i JOIN people p ON p.id=i.person
     WHERE i.shift=? ORDER BY p.name`).all(shift.id);
@@ -235,6 +261,7 @@ function planningShift(db, shift, staff, timezone, failure) {
       const answers = JSON.parse(response.answers);
       return `<li><strong>${esc(response.name)}</strong> ${status(response.released_by_dispo ? "released" : response.status)}
       ${response.status === "assigned" && isUpcoming && response.access_suspended ? '<p>Zugang gesperrt. Besetzung prüfen.</p>' : ""}
+      ${response.status === "assigned" && needsQualification && missing.length ? `<p>Besetzung prüfen. Fehlende geprüfte Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${answers.length ? `<dl>${answers.map((answer, index) => `<dt>${esc(questions[index])}</dt><dd>${esc(answer)}</dd>`).join("")}</dl>` : ""}
       ${response.status === "interested" && missing.length ? `<p>Fehlende Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${response.status === "interested" && isUpcoming && !response.access_suspended && !missing.length && shift.filled < shift.slots
@@ -313,6 +340,17 @@ export function render(db, user, timezone, path, message, failure, registrationO
       const person = Number(failure.form.get("person"));
       if (Number.isSafeInteger(person) && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff'").get(person)) {
         return adminHome(db, user, timezone, { person, message });
+      }
+    }
+    if (user?.role === "admin" && ["/dispo/nachforderung", "/dispo/nachweis", "/dispo/nachweis-zuruecknehmen"].includes(failure.path)) {
+      const key = Number(failure.form.get(failure.path === "/dispo/nachforderung" ? "person" : "qualification"));
+      if (Number.isSafeInteger(key)) {
+        const person = failure.path === "/dispo/nachforderung" ? key
+          : db.prepare("SELECT person FROM qualifications WHERE id=?").get(key)?.person;
+        if (person && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff'").get(person)) {
+          const requestForm = failure.path === "/dispo/nachforderung" ? failure.form : undefined;
+          return adminHome(db, user, timezone, { person, message, requestForm });
+        }
       }
     }
     if (user?.role === "admin" && failure.path === "/dispo/einsatz") {

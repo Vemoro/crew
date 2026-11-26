@@ -106,7 +106,7 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   await mira("/qualifikation", { name: "Sicherheitsfreigabe", validUntil: future(8) }, 303);
   await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422);
   await admin("/dispo/nachweis", { qualification: 2, revision: 1 }, 422);
-  await admin("/dispo/nachweis", { qualification: 2, revision: 2 }, 303);
+  await admin("/dispo/nachweis", { qualification: 2, revision: 3 }, 303);
   await mira("/absagen", { shift: 1, status: "interested", revision: 1 }, 303);
   await mira("/interesse", new URLSearchParams([["shift", "1"], ["answer", "Tor 6"], ["answer", "13:30"]]), 303);
   assert.match(await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422), /Bewerbung hat sich geändert/);
@@ -174,6 +174,7 @@ test("Ein bestehender Datenbestand erhält Bewerbungsrevisionen ohne Datenverlus
     ALTER TABLE shifts DROP COLUMN locked_instructions;
     ALTER TABLE shifts DROP COLUMN placement_revision;
     ALTER TABLE responses DROP COLUMN released_by_dispo;
+    DROP TABLE qualification_requests;
     PRAGMA user_version = 1;
     INSERT INTO people (id,email,name,secret,role,status) VALUES (1,'mira@example.test','Mira','synthetic','staff','active');
     INSERT INTO events (id,title,location) VALUES (1,'Stadtfest West','Musterhalle');
@@ -187,7 +188,7 @@ test("Ein bestehender Datenbestand erhält Bewerbungsrevisionen ohne Datenverlus
       const row = migrated.prepare("SELECT status, revision FROM responses WHERE shift=1 AND person=1").get();
       assert.equal(row.status, "assigned");
       assert.equal(row.revision, 1);
-      assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 4);
+      assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 5);
       assert.equal(migrated.prepare("SELECT access_suspended FROM people WHERE id=1").get().access_suspended, 0);
     } finally {
       migrated.close();

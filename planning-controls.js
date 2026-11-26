@@ -13,7 +13,7 @@ export function correctionForm(event, upcoming, failure) {
       + button("Angaben aktualisieren"))}</details>`;
 }
 
-function confirmation(id, toggleLabel, title, detail, action, fields, submitLabel) {
+export function confirmation(id, toggleLabel, title, detail, action, fields, submitLabel) {
   return `<div class="secondary"><button type="button" data-open-dialog="${id}">${toggleLabel}</button></div>
     <dialog id="${id}" aria-labelledby="${id}-title">
       <h3 id="${id}-title">${title}</h3><p>${detail}</p>
