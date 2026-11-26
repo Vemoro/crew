@@ -32,3 +32,22 @@ test("Codegröße und Abstandsraster unterscheiden Grenzwerte von gültigen Ausn
   assert.match(rejected.stderr, /padding: var\(--space, -2px\)/);
   assert.doesNotMatch(rejected.stderr, /border|source\.test\.js/);
 });
+
+test("Der Rastercheck erfasst Deklarationen nach verschachtelten CSS-Blöcken", t => {
+  const cwd = mkdtempSync(join(tmpdir(), "crew-nested-css-check-"));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  execFileSync("git", ["init", "--quiet"], { cwd });
+  const check = fileURLToPath(new URL("../scripts/check-source.mjs", import.meta.url));
+  const path = join(cwd, "nested.css");
+  const stylesheet = gap => `main {
+    display: grid;
+    @media (min-width: 1px) { color: red; }
+    gap: ${gap}px;
+  }`;
+  writeFileSync(path, stylesheet(8));
+  assert.equal(spawnSync(process.execPath, [check], { cwd }).status, 0);
+  writeFileSync(path, stylesheet(6));
+  const rejected = spawnSync(process.execPath, [check], { cwd, encoding: "utf8" });
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /nested\.css:4: gap: 6px/);
+});

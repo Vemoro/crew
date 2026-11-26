@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 const paths = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { encoding: "utf8" });
 const source = /\.(?:[cm]?[jt]sx?|css)$/;
 const tests = /^(?:test|tests)\/|\.(?:test|spec)\.[^.]+$|^scripts\/check-browser\.mjs$/;
-const spacingProperties = /(?:^|(?<=[{;]))\s*((?:padding|margin)(?:-[a-z-]+)?|gap|row-gap|column-gap)\s*:\s*([^;{}]+)/gi;
+const spacingProperties = /(?:^|(?<=[{};]))\s*((?:padding|margin)(?:-[a-z-]+)?|gap|row-gap|column-gap)\s*:\s*([^;{}]+)/gi;
 const pixels = /(?<![\w.-])([+-]?(?:\d*\.\d+|\d+))px\b/gi;
 const commentsAndStrings = /\/\*[\s\S]*?\*\/|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'/g;
 
