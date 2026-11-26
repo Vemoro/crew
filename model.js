@@ -15,7 +15,7 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite", {
   transaction(db, () => {
     const { user_version: version } = db.prepare("PRAGMA user_version").get();
     requireInput(initialize || version > 0, "Der Datenbestand wurde noch nicht als Crew-Datenbank eingerichtet.");
-    if (version > 3) throw new Error("Unbekannte Version der Crew-Datenbank.");
+    if (version > 4) throw new Error("Unbekannte Version der Crew-Datenbank.");
     if (version === 0) db.exec(`
     CREATE TABLE people (
       id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
@@ -66,6 +66,15 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite", {
       ALTER TABLE people ADD COLUMN access_suspended INTEGER NOT NULL DEFAULT 0 CHECK(access_suspended IN (0,1));
       ALTER TABLE people ADD COLUMN access_revision INTEGER NOT NULL DEFAULT 1;
       PRAGMA user_version = 3;
+    `);
+    if (version < 4) db.exec(`
+      ALTER TABLE events ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE shifts ADD COLUMN cancelled_at TEXT;
+      ALTER TABLE shifts ADD COLUMN locked_location TEXT;
+      ALTER TABLE shifts ADD COLUMN locked_instructions TEXT;
+      ALTER TABLE shifts ADD COLUMN placement_revision INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE responses ADD COLUMN released_by_dispo INTEGER NOT NULL DEFAULT 0 CHECK(released_by_dispo IN (0,1));
+      PRAGMA user_version = 4;
     `);
   });
   return db;
@@ -140,7 +149,8 @@ export function updatePoolAccess(db, person, revision, suspended) {
 }
 
 export const shiftQuery = `
-  SELECT s.*, e.title AS event_title, e.location, e.instructions,
+  SELECT s.*, e.title AS event_title, COALESCE(s.locked_location,e.location) AS location,
+         COALESCE(s.locked_instructions,e.instructions) AS instructions,
          (SELECT count(*) FROM responses r WHERE r.shift=s.id AND r.status='assigned') AS filled
   FROM shifts s JOIN events e ON e.id=s.event
 `;
@@ -156,6 +166,7 @@ export function missingQualifications(db, shift, person, timing, timezone) {
 }
 
 export function canSee(db, shift, person) {
+  if (shift.cancelled_at) return false;
   return shift.visibility === "pool" || (shift.visibility === "invite" && Boolean(
     db.prepare("SELECT 1 FROM invitations WHERE shift=? AND person=?").get(shift.id, person)
   ));
@@ -172,7 +183,8 @@ export function respond(db, shiftId, person, answers, timezone) {
     requireInput(answers.length === questions.length && answers.every(answer => answer.length > 0 && answer.length <= 2000),
       "Bitte beantworte alle Fragen mit höchstens 2.000 Zeichen pro Antwort.");
     db.prepare(`INSERT INTO responses (shift,person,status,answers) VALUES (?,?,'interested',?)
-      ON CONFLICT(shift,person) DO UPDATE SET status='interested', answers=excluded.answers, revision=responses.revision+1
+      ON CONFLICT(shift,person) DO UPDATE SET status='interested', answers=excluded.answers,
+        revision=responses.revision+1, released_by_dispo=0
       WHERE responses.status='withdrawn' OR (responses.status='interested' AND responses.answers<>excluded.answers)`)
       .run(shiftId, person, JSON.stringify(answers));
   });
@@ -184,16 +196,19 @@ export function assign(db, shiftId, person, revision, timezone) {
     const response = db.prepare(`SELECT r.status, r.revision, p.status AS person_status, p.access_suspended
       FROM responses r JOIN people p ON p.id=r.person WHERE r.shift=? AND r.person=?`).get(shiftId, person);
     requireInput(response?.revision === revision, "Die Bewerbung hat sich geändert. Bitte prüfe die aktuelle Rückmeldung.");
+    requireInput(shift && !shift.cancelled_at, "Die Schicht steht nicht mehr zur Besetzung bereit.");
     if (response?.status === "assigned") return;
-    requireInput(shift && response?.status === "interested" && response.person_status === "active" && !response.access_suspended
+    requireInput(response?.status === "interested" && response.person_status === "active" && !response.access_suspended
       && canSee(db, shift, person), "Es liegt keine gültige Einsatzbewerbung vor.");
     requireInput(shift.starts > new Date().toISOString(), "Die Schicht hat bereits begonnen.");
     requireInput(shift.filled < shift.slots, "Alle Plätze sind bereits besetzt.");
     const missing = missingQualifications(db, shift, person, "assign", timezone);
     requireInput(missing.length === 0, "Fehlende geprüfte Qualifikationen: " + missing.join(", "));
     const overlap = db.prepare(`SELECT 1 FROM responses r JOIN shifts s ON s.id=r.shift
-      WHERE r.person=? AND r.status='assigned' AND s.starts < ? AND s.ends > ?`).get(person, shift.ends, shift.starts);
+      WHERE r.person=? AND r.status='assigned' AND s.cancelled_at IS NULL AND s.starts < ? AND s.ends > ?`)
+      .get(person, shift.ends, shift.starts);
     requireInput(!overlap, "Die Person ist zeitgleich bereits eingeteilt.");
     db.prepare("UPDATE responses SET status='assigned' WHERE shift=? AND person=?").run(shiftId, person);
+    db.prepare("UPDATE shifts SET placement_revision=placement_revision+1 WHERE id=?").run(shiftId);
   });
 }

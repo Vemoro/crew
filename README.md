@@ -11,6 +11,8 @@ Das Projekt wird für die öffentliche Auslieferung ab Version 0.1.0.0 vorbereit
 3. Personal meldet Interesse und beantwortet Pflichtfragen. Die Dispo sieht Rückmeldungen und besetzt freie Plätze verbindlich.
 4. Das Portal zeigt bestätigte Schichten, offene Nachweise und erwartete Vergütung. Absagen machen Plätze für die Nachbesetzung frei.
 
+Die Dispo kann Ort und Hinweise für zukünftige Schichten korrigieren, einzelne bestätigte Plätze wieder freigeben oder eine bevorstehende Schicht vollständig zurücknehmen. Änderungen an Zeit, Vergütung und Voraussetzungen benötigen eine eigene neue Schicht. Bereits begonnene und vergangene Einsätze behalten ihren bisherigen Stand.
+
 Der erste Stand unterstützt pauschale Schichtvergütung und externe Einsatzreferenzen. Schnittstellen zu Desk und Haben, Ist-Zeiten, Abrechnungsbelege und Urlaub sind spätere Ausbaustufen.
 
 ## Schnellstart

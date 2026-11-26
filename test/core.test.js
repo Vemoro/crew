@@ -168,6 +168,12 @@ test("Ein bestehender Datenbestand erhält Bewerbungsrevisionen ohne Datenverlus
     ALTER TABLE responses DROP COLUMN revision;
     ALTER TABLE people DROP COLUMN access_revision;
     ALTER TABLE people DROP COLUMN access_suspended;
+    ALTER TABLE events DROP COLUMN revision;
+    ALTER TABLE shifts DROP COLUMN cancelled_at;
+    ALTER TABLE shifts DROP COLUMN locked_location;
+    ALTER TABLE shifts DROP COLUMN locked_instructions;
+    ALTER TABLE shifts DROP COLUMN placement_revision;
+    ALTER TABLE responses DROP COLUMN released_by_dispo;
     PRAGMA user_version = 1;
     INSERT INTO people (id,email,name,secret,role,status) VALUES (1,'mira@example.test','Mira','synthetic','staff','active');
     INSERT INTO events (id,title,location) VALUES (1,'Stadtfest West','Musterhalle');
@@ -181,7 +187,7 @@ test("Ein bestehender Datenbestand erhält Bewerbungsrevisionen ohne Datenverlus
       const row = migrated.prepare("SELECT status, revision FROM responses WHERE shift=1 AND person=1").get();
       assert.equal(row.status, "assigned");
       assert.equal(row.revision, 1);
-      assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 3);
+      assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 4);
       assert.equal(migrated.prepare("SELECT access_suspended FROM people WHERE id=1").get().access_suspended, 0);
     } finally {
       migrated.close();
