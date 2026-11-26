@@ -8,7 +8,7 @@ import {
 } from "./model.js";
 import { render, renderEvidence, renderShift } from "./views.js";
 import { clientAddress, webConfig } from "./web-config.js";
-import { cancelShift, correctEvent, releasePlace } from "./planning.js";
+import { cancelShift, correctEvent, inviteToShift, releasePlace } from "./planning.js";
 import { requestQualification, reviewQualification, submitQualification } from "./qualifications.js";
 
 const lifetime = 12 * 60 * 60;
@@ -162,7 +162,7 @@ async function submitStaff({ db, user, token, path, form, timezone }) {
     transaction(db, () => {
       const current = findUser(db, token);
       requireInput(current && current.status !== "rejected", "Du kannst derzeit keine Nachweise einreichen.");
-        submitQualification(db, user.id, name, validUntil, evidence);
+      submitQualification(db, user.id, name, validUntil, evidence);
     });
     return "/#profil";
   }
@@ -263,9 +263,14 @@ function submitPlanning({ db, path, form, timezone }) {
         if (!requirements.has(name)) requirements.set(name, { name, timing });
       }
     }
-    db.prepare(`INSERT INTO shifts (event,title,starts,ends,slots,cents,requirements,questions,visibility)
-      VALUES (?,?,?,?,?,?,?,?,'draft')`).run(event, field(form, "title", 120), starts, ends, slots, cents,
-        JSON.stringify([...requirements.values()]), JSON.stringify(lines(form, "questions")));
+    const title = field(form, "title", 120);
+    const questions = JSON.stringify(lines(form, "questions"));
+    transaction(db, () => {
+      db.prepare(`INSERT INTO shifts (event,title,starts,ends,slots,cents,requirements,questions,visibility)
+        VALUES (?,?,?,?,?,?,?,?,'draft')`).run(event, title, starts, ends, slots, cents,
+          JSON.stringify([...requirements.values()]), questions);
+      db.prepare("UPDATE events SET revision=revision+1 WHERE id=?").run(event);
+    });
     return `/dispo#event-${event}`;
   }
   if (path === "/dispo/sichtbarkeit" || path === "/dispo/einladen" || path === "/dispo/einteilen") {
@@ -279,11 +284,7 @@ function submitPlanning({ db, path, form, timezone }) {
         .run(visibility, shift.id, new Date().toISOString());
       requireInput(published.changes === 1, "Diese Schicht ist bereits veröffentlicht oder hat begonnen.");
     } else if (path === "/dispo/einladen") {
-      const person = id(form, "person");
-      requireInput(shift.visibility === "invite" && !shift.cancelled_at && shift.starts > new Date().toISOString()
-        && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff' AND status='active' AND access_suspended=0").get(person),
-      "Eine Einladung benötigt eine offene Einladungsschicht und ein aktives Poolmitglied.");
-      db.prepare("INSERT OR IGNORE INTO invitations VALUES (?,?)").run(shift.id, person);
+      inviteToShift(db, shift.id, id(form, "person"));
     } else {
       assign(db, shift.id, id(form, "person"), id(form, "revision"), timezone);
     }

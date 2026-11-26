@@ -143,6 +143,9 @@ try {
   await staff.reload();
   assert.match(await staff.locator(".overview").innerText(), /125,00\s€/);
   await admin.getByText("Ort und Hinweise korrigieren", { exact: true }).click();
+  await admin.getByText("Die Änderung betrifft diese Schichten", { exact: true }).waitFor();
+  await admin.getByText(/^Aufbau ·/).waitFor();
+  await show(admin, "einsatzkorrektur-hell");
   await admin.getByLabel("Korrigierter Ort").fill("Andere Musterhalle");
   await admin.getByRole("button", { name: "Angaben aktualisieren" }).click();
   await secondShift.getByRole("button", { name: "Platz freigeben", exact: true }).click();
@@ -155,6 +158,12 @@ try {
   await show(admin, "platzfreigabe-hell", false);
   await admin.setViewportSize({ width: 390, height: 844 });
   await show(admin, "platzfreigabe-handy", false);
+  await admin.emulateMedia({ colorScheme: "dark" });
+  await show(admin, "platzfreigabe-handy-dunkel", false);
+  await admin.keyboard.press("Escape");
+  assert.equal(await secondShift.getByRole("button", { name: "Platz freigeben", exact: true })
+    .evaluate(field => field === document.activeElement), true);
+  await admin.keyboard.press("Enter");
   await release.getByRole("button", { name: "Platzfreigabe bestätigen" }).click();
   await staff.reload();
   assert.match(await staff.locator(".overview").innerText(), /80,00\s€/);
@@ -183,7 +192,7 @@ try {
   await staffMobile.getByText("Zurückgezogen", { exact: true }).waitFor();
   assert.match(await staffMobile.locator(".overview").innerText(), /0,00\s€/);
   await admin.reload();
-  await admin.locator("#person-2 summary").click();
+  await admin.locator("#person-2 > details > summary").click();
   const suspend = admin.getByRole("button", { name: "Zugang sperren", exact: true });
   await suspend.click();
   const suspendDialog = admin.getByRole("dialog", { name: "Zugang sperren?" });
@@ -201,7 +210,7 @@ try {
   await admin.getByText("Zugang gesperrt", { exact: true }).waitFor();
   await staff.goto(origin);
   await staff.getByRole("heading", { name: "Bei Crew anmelden" }).waitFor();
-  await admin.locator("#person-2 summary").click();
+  await admin.locator("#person-2 > details > summary").click();
   await admin.getByRole("button", { name: "Zugang wieder freigeben" }).click();
   await admin.getByRole("dialog", { name: "Zugang wieder freigeben?" })
     .getByRole("button", { name: "Zugang freigeben" }).click();
@@ -209,6 +218,30 @@ try {
   await staff.getByLabel("Passwort").fill(password);
   await staff.getByRole("button", { name: "Anmelden", exact: true }).click();
   await staff.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
+
+  const profile = admin.locator("#person-2");
+  const requestToggle = profile.locator("summary").filter({ hasText: /^Nachweis anfordern$/ });
+  await profile.locator(":scope > details > summary").press("Enter");
+  await requestToggle.press("Enter");
+  await profile.getByLabel("Bezeichnung (wie im Personalnachweis)").fill("Heben und Tragen");
+  await profile.getByLabel("Anforderung für das Personalportal").fill("Bitte reiche den aktuellen Nachweis ein.");
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await show(admin, "nachforderung-dispo-handy");
+  await profile.getByRole("button", { name: "Nachweis anfordern", exact: true }).press("Enter");
+  await profile.getByText("Nachweis angefordert", { exact: true }).waitFor({ state: "attached" });
+  await profile.locator(":scope > details > summary").press("Enter");
+  await requestToggle.press("Enter");
+  await profile.getByLabel("Bezeichnung (wie im Personalnachweis)").fill("Heben und Tragen");
+  await profile.getByLabel("Anforderung für das Personalportal").fill("Doppelter Auftrag");
+  await profile.getByRole("button", { name: "Nachweis anfordern", exact: true }).press("Enter");
+  await profile.getByRole("alert").getByText("Für diesen Nachweis läuft bereits eine Nachforderung.").waitFor();
+  assert.equal(await profile.getByLabel("Anforderung für das Personalportal").inputValue(), "Doppelter Auftrag");
+  await staff.reload();
+  await staff.getByText("Nachweis angefordert", { exact: true }).waitFor();
+  await staff.setViewportSize({ width: 390, height: 844 });
+  await show(staff, "nachforderung-personal-handy-hell");
+  await staff.emulateMedia({ colorScheme: "dark" });
+  await show(staff, "nachforderung-personal-handy-dunkel");
 
   await new Promise(resolve => app.close(resolve));
   runningApp = createApp({ db, origin, registrationOpen: false });

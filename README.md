@@ -11,7 +11,7 @@ Das Projekt wird für die öffentliche Auslieferung ab Version 0.1.0.0 vorbereit
 3. Personal meldet Interesse und beantwortet Pflichtfragen. Die Dispo sieht Rückmeldungen und besetzt freie Plätze verbindlich.
 4. Das Portal zeigt bestätigte Schichten, offene Nachweise und erwartete Vergütung. Absagen machen Plätze für die Nachbesetzung frei.
 
-Die Dispo kann Ort und Hinweise für zukünftige Schichten korrigieren, einzelne bestätigte Plätze wieder freigeben oder eine bevorstehende Schicht vollständig zurücknehmen. Änderungen an Zeit, Vergütung und Voraussetzungen benötigen eine eigene neue Schicht. Bereits begonnene und vergangene Einsätze behalten ihren bisherigen Stand.
+Die Dispo kann Ort und Hinweise für zukünftige Schichten korrigieren, einzelne bestätigte Plätze wieder freigeben oder eine bevorstehende Schicht vollständig zurücknehmen. Vor einer Korrektur zeigt das Formular die betroffenen Schichten. Bereits begonnene, vergangene und zurückgenommene Schichten behalten ihre bisherigen Angaben. Änderungen an Zeit, Vergütung und Voraussetzungen benötigen eine neue Schicht.
 
 Die Dispo kann Prüfungen von Qualifikationen zurücknehmen und Nachweise als Aufgabe nachfordern. Bereits bestätigte Plätze bleiben reserviert. Die Dispo sieht, wenn sie eine solche Besetzung wegen fehlender Nachweise erneut prüfen muss.
 

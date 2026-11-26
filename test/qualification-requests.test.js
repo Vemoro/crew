@@ -50,9 +50,15 @@ test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehen
   await visit("/dispo/einteilen", admin, { shift: 3, person: 2, revision: 1 }, 422);
   assert.match((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise: funk/);
   assert.match((await visit("/", mira)).html, /Erwartete Vergütung<\/span><strong>80,00\s€/);
+  db.prepare("UPDATE shifts SET starts=? WHERE id=1").run(new Date(Date.now() - 3600000).toISOString());
+  assert.match((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise: funk/);
+  db.prepare("UPDATE shifts SET ends=? WHERE id=1").run(new Date(Date.now() - 10000).toISOString());
+  assert.doesNotMatch((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise/);
+  db.exec("UPDATE shifts SET starts='2099-01-01T10:00:00.000Z',ends='2099-01-01T12:00:00.000Z' WHERE id=1");
   await visit("/qualifikation", mira, { name: "Funk" }, 303);
   assert.match((await visit("/", mira)).html, /In Prüfung[\s\S]+Bitte den neuen Nachweis/);
   await visit("/dispo/nachweis", admin, { qualification: 1, revision: 3 }, 303);
+  await visit("/dispo/nachweis-zuruecknehmen", admin, { qualification: 1, revision: 1 }, 422);
   assert.match((await visit("/", mira)).html, /Erledigt[\s\S]+Bitte den neuen Nachweis/);
   assert.doesNotMatch((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise/);
 });
