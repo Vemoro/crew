@@ -2,7 +2,9 @@
 
 ## Farbe und Orientierung
 
-Crew verwendet Violett für Navigation, Fokus und Primäraktionen in Hell und Dunkel. Blau und Grün bleiben die Markenfarben von Desk und Haben. Fachzustände werden mit Text benannt und lassen sich ohne Farbe unterscheiden.
+Crew verwendet Orange für Markenakzent, Fokus, Links und Primäraktionen. Neutrale Arbeitsflächen und eine dunkle Kopfzeile geben den Inhalten Vorrang. Im dunklen Modus liegen die Flächen in neutralen Grautönen und der orange Akzent trägt dunkle Schrift. Fachzustände werden mit Text benannt und lassen sich ohne Farbe unterscheiden.
+
+Crew orientiert sich an Habens schlichten Arbeitsflächen, dem 4-Pixel-Raster, kompakten Formularen und der Anordnung von Haupt- und Nebenaktionen. Beträge und Kennzahlen verwenden gleich breite Ziffern. [Gestaltung von Haben](https://github.com/Speicherstadt/haben/blob/fb333122757c256e7584934ad89246b7259220f0/DESIGN.md)
 
 Verwende eine konsistente Icon-Komponente mit verständlichen Beschriftungen. Ein allein stehendes Symbol braucht einen zugänglichen Namen. Am Smartphone öffnet ein beschrifteter Menüknopf die Hauptnavigation. Der aktuelle Bereich bleibt erkennbar.
 

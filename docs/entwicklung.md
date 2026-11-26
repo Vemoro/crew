@@ -69,6 +69,8 @@ Nutze die Befehle der jeweiligen Zielbasis. Auf einem Stand mit Anwendung gehör
 
 Verwende für Browserfälle und Screenshots denselben synthetischen Ausgangsbestand, feste Viewports und bei datumsabhängigen Ansichten vergleichbare Zeitpunkte. Prüfe Aufnahme und Lesbarkeit vor der Übernahme in PR oder Nutzerdoku.
 
+Crew verwendet `npm test` für die HTTP-Prüfung mit In-Memory-SQLite. Für den Browsertest installiere mit `npm ci` die Entwicklungsabhängigkeiten und mit `npx playwright install chromium` den Browser. `npm run test:browser` startet eine separate Instanz mit synthetischen Daten und schreibt Screenshots nach `build/screenshots/`. Bei Portkonflikten wähle mit `CREW_BROWSER_PORT` einen freien Port. Der Workflow **Prüfungen** stellt die Bilder als Artefakt `crew-ansichten` bereit.
+
 Auf einem Stand mit Entwicklungsdoku allein prüfe die geänderten Regeln, Verweise, Skills und Beispiele. Halte dort offen fest, welche Anwendungstests mangels Anwendung auf dieser Zielbasis nicht laufen. Für Screenshots und Beispiele nutze fiktive oder anonymisierte Angaben. Zugangsdaten und personenbezogene Daten bleiben aus Repository, Issues, Prompts und Logs heraus.
 
 Doku, Oberfläche und Beiträge werden auf Deutsch geschrieben, Code-Bezeichner auf Englisch. Eine Regel steht an einer maßgeblichen Stelle. Der Skill verweist dorthin und beschreibt den Ablauf. Vorher-Nachher-Bilder nutzen vollständige Git-Stände, gleiche Daten und Viewports sowie Hell, Dunkel und bei betroffener Bedienung Smartphone. Der [Screenshot-Skill](../.agents/skills/crew-pr-screenshots/SKILL.md) beschreibt Aufnahme und Veröffentlichung.
