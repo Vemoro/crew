@@ -175,24 +175,41 @@ export function renderShift(db, user, id, timezone, failure) {
         : box("Für die Schicht bewerben", form)}`);
 }
 
-function staffReview(db, person) {
-  return `<li><details><summary>${esc(person.name)} ${status(person.status)}</summary>
+function poolAccessControls(person) {
+  const value = person.access_suspended ? "resume" : "suspend";
+  const title = person.access_suspended ? "Zugang wieder freigeben?" : "Zugang sperren?";
+  const consequence = person.access_suspended
+    ? "Die Person kann sich wieder anmelden. Frühere Sitzungen bleiben ungültig."
+    : "Die Person wird abgemeldet. Bestätigte Schichten bleiben reserviert, bis die Dispo sie prüft.";
+  return `<div class="secondary"><button type="button" data-open-dialog="access-${person.id}">${person.access_suspended ? "Zugang wieder freigeben" : "Zugang sperren"}</button></div>
+    <dialog id="access-${person.id}" aria-labelledby="access-title-${person.id}">
+      <h3 id="access-title-${person.id}">${title}</h3><p><strong>${esc(person.name)}</strong></p><p>${consequence}</p>
+      ${post("/dispo/kontozugang", hidden("person", person.id) + hidden("revision", person.access_revision) + hidden("action", value)
+        + `<div class="dialog-actions"><button class="quiet" type="submit" formmethod="dialog" autofocus>Abbrechen</button>
+          ${person.access_suspended ? button("Zugang freigeben") : '<button class="danger" type="submit">Sperre bestätigen</button>'}</div>`)}
+    </dialog>`;
+}
+
+function staffReview(db, person, failure) {
+  return `<li id="person-${person.id}"><details ${failure ? "open" : ""}><summary>${esc(person.name)}
+    ${person.access_suspended ? '<span class="status danger">Zugang gesperrt</span>' : status(person.status)}</summary>
+    ${alert(failure?.message)}
     <p>${esc(person.email)}</p><p class="preserve">${esc(person.availability || "Keine typische Verfügbarkeit hinterlegt.")}</p>
     ${qualificationList(db, person.id, true)}
     ${person.status !== "active" ? post("/dispo/freigabe", hidden("person", person.id)
       + label("Rückmeldung an die Person (optional)", textarea("note", 1000, person.review_note))
       + label("Entscheidung", `<select name="status"><option value="pending">In Prüfung belassen</option>
         <option value="active">In den Pool aufnehmen</option><option value="rejected">Ablehnen</option></select>`)
-      + button("Entscheidung speichern")) : ""}</details></li>`;
+      + button("Entscheidung speichern")) : poolAccessControls(person)}</details></li>`;
 }
 
 function planningShift(db, shift, staff, timezone) {
-  const responses = db.prepare(`SELECT r.*, p.name FROM responses r JOIN people p ON p.id=r.person
+  const responses = db.prepare(`SELECT r.*, p.name, p.access_suspended FROM responses r JOIN people p ON p.id=r.person
     WHERE r.shift=? ORDER BY CASE r.status WHEN 'assigned' THEN 0 WHEN 'interested' THEN 1 ELSE 2 END, p.name`).all(shift.id);
   const questions = JSON.parse(shift.questions);
   const requirements = JSON.parse(shift.requirements);
   const isUpcoming = shift.starts > new Date().toISOString();
-  const invitations = staff.filter(person => person.status === "active");
+  const invitations = staff.filter(person => person.status === "active" && !person.access_suspended);
   const invitationNames = db.prepare(`SELECT p.name FROM invitations i JOIN people p ON p.id=i.person
     WHERE i.shift=? ORDER BY p.name`).all(shift.id);
   return `<div class="shift" id="shift-${shift.id}"><h3>${esc(shift.title)}</h3>
@@ -215,9 +232,10 @@ function planningShift(db, shift, staff, timezone) {
       const missing = missingQualifications(db, shift, response.person, "assign", timezone);
       const answers = JSON.parse(response.answers);
       return `<li><strong>${esc(response.name)}</strong> ${status(response.status)}
+      ${response.status === "assigned" && isUpcoming && response.access_suspended ? '<p>Zugang gesperrt. Besetzung prüfen.</p>' : ""}
       ${answers.length ? `<dl>${answers.map((answer, index) => `<dt>${esc(questions[index])}</dt><dd>${esc(answer)}</dd>`).join("")}</dl>` : ""}
       ${response.status === "interested" && missing.length ? `<p>Fehlende Nachweise: ${esc(missing.join(", "))}</p>` : ""}
-      ${response.status === "interested" && isUpcoming && !missing.length && shift.filled < shift.slots
+      ${response.status === "interested" && isUpcoming && !response.access_suspended && !missing.length && shift.filled < shift.slots
         ? post("/dispo/einteilen", hidden("shift", shift.id) + hidden("person", response.person)
           + hidden("revision", response.revision) + button("Besetzung bestätigen")) : ""}</li>`;
     }).join("")}</ul>` : empty("Noch keine Rückmeldungen.")}</div>`;
@@ -240,7 +258,8 @@ function shiftForm(event, timezone, failure) {
 }
 
 function adminHome(db, user, timezone, failure) {
-  const staff = db.prepare("SELECT id,name,email,status,availability,review_note FROM people WHERE role='staff' ORDER BY status='pending' DESC,name").all();
+  const staff = db.prepare(`SELECT id,name,email,status,availability,review_note,access_suspended,access_revision
+    FROM people WHERE role='staff' ORDER BY status='pending' DESC,name`).all();
   const events = db.prepare("SELECT * FROM events ORDER BY id DESC").all();
   const shifts = db.prepare(shiftQuery + " ORDER BY s.starts").all();
   const eventFailure = failure?.type === "event" ? failure : undefined;
@@ -253,10 +272,12 @@ function adminHome(db, user, timezone, failure) {
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
     ${failure?.event ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.person ? `<p><a href="#person-${failure.person}">Zum Personalprofil mit der Fehlermeldung</a></p>` : ""}
     ${eventFailure ? '<p><a href="#neuer-einsatz">Zum Einsatzformular mit der Fehlermeldung</a></p>' : ""}
     <div class="overview"><div><span class="muted">Bewerbungen in Prüfung</span><strong>${staff.filter(p => p.status === "pending").length}</strong></div>
-    <div><span class="muted">Aktive Poolmitglieder</span><strong>${staff.filter(p => p.status === "active").length}</strong></div></div>`
-    + box("Personal", staff.length ? `<ul class="items">${staff.map(person => staffReview(db, person)).join("")}</ul>`
+    <div><span class="muted">Aktive Poolmitglieder</span><strong>${staff.filter(p => p.status === "active" && !p.access_suspended).length}</strong></div></div>`
+    + box("Personal", staff.length ? `<ul class="items">${staff.map(person =>
+      staffReview(db, person, failure?.person === person.id ? failure : undefined)).join("")}</ul>`
       : empty("Sobald sich jemand registriert, erscheint die Bewerbung hier."), "personal")
     + box("Einsätze", `<details id="neuer-einsatz" ${!events.length || eventFailure ? "open" : ""}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
@@ -267,6 +288,12 @@ function adminHome(db, user, timezone, failure) {
 
 export function render(db, user, timezone, path, message, failure) {
   if (message && failure?.form) {
+    if (user?.role === "admin" && failure.path === "/dispo/kontozugang") {
+      const person = Number(failure.form.get("person"));
+      if (Number.isSafeInteger(person) && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff'").get(person)) {
+        return adminHome(db, user, timezone, { person, message });
+      }
+    }
     if (user?.role === "admin" && failure.path === "/dispo/einsatz") {
       return adminHome(db, user, timezone, { type: "event", form: failure.form, message });
     }
