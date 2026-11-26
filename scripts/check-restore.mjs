@@ -83,12 +83,16 @@ try {
   const sourceBase = await start(source);
   const oldCookie = { Cookie: "crew_session=" + session };
   assert.equal((await fetch(sourceBase + "/nachweis/1", { headers: oldCookie })).status, 200);
+  const untouchedCookie = { Cookie: await login(sourceBase, "mira@example.test") };
   await verify(sourceBase);
   compose(source, ["stop", "crew"]);
 
   compose(target, ["run", "--rm", "-T", "-v", `${source}_crew-data:/snapshot:ro`, "crew",
     "sh", "-c", "cp -a /snapshot/. /app/data/"]);
-  maintenance(source, "invalidate-sessions");
+  const liveSource = await start(source);
+  const logout = await fetch(liveSource + "/abmelden", { method: "POST", redirect: "manual",
+    headers: { ...oldCookie, Origin: origin }, body: new URLSearchParams() });
+  assert.equal(logout.status, 303);
   maintenance(target, "invalidate-sessions");
   const targetBase = await start(target);
   assert.equal((await fetch(targetBase + "/nachweis/1", { headers: oldCookie })).status, 404);
@@ -99,8 +103,10 @@ try {
   assert.equal(failed.error, undefined);
   assert.notEqual(failed.status, 0, "Eine beschädigte Datenbank darf nicht als bereit gemeldet werden.");
   assert.match(failed.stderr, /file is not a database/);
+  compose(source, ["stop", "crew"]);
   const recoveredSource = await start(source);
   assert.equal((await fetch(recoveredSource + "/nachweis/1", { headers: oldCookie })).status, 404);
+  assert.equal((await fetch(recoveredSource + "/nachweis/1", { headers: untouchedCookie })).status, 200);
   await verify(recoveredSource);
   console.log("Compose-Restore: Sitzungen, Konten, PDF, Einladungen, Rückmeldungen und Besetzung geprüft.");
 } finally {
