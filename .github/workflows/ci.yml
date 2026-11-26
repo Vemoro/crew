@@ -43,3 +43,5 @@ jobs:
           path: build/screenshots/*.png
       - name: Container bauen
         run: docker build -t crew-ci .
+      - name: Quellpaket prüfen
+        run: python3 scripts/package-release-source.py "$GITHUB_SHA" "$RUNNER_TEMP/crew-source"
