@@ -44,8 +44,30 @@ Dieser Crew-Stand migriert die Datenbank beim Start der Anwendung oder CLI auf S
 
 ## Adresse und Zeitzone
 
-Der Dienst bindet lokal an `127.0.0.1:8080`. Setze `PORT` beim nativen Start oder `CREW_PORT` für Compose, wenn ein anderer Host-Port benötigt wird. Setze auch `CREW_ORIGIN` auf die im Browser verwendete Adresse. Verwende bei einem HTTPS-Reverse-Proxy dessen öffentliche HTTPS-Origin, damit Crew sichere Sitzungscookies ausgibt. In Compose kannst du die Werte in der Shell oder einer lokalen `.env` konfigurieren. Bei einem Proxy außerhalb des Compose-Netzwerks gilt die freigegebene Loopback-Adresse als Upstream auf demselben Host.
+Der Dienst bindet lokal an `127.0.0.1:8080`. Setze `PORT` beim nativen Start oder `CREW_PORT` für Compose, wenn ein anderer Host-Port benötigt wird. Setze auch `CREW_ORIGIN` auf die im Browser verwendete Adresse. HTTP ist ausschließlich für die lokale Loopback-Adresse vorgesehen. Eine externe Adresse braucht HTTPS. In Compose kannst du die Werte in der Shell oder einer lokalen `.env` konfigurieren.
 
 `TZ` legt die Zeitzone für alle Schichten auf dieser Instanz fest. Der Standard ist `Europe/Berlin`. Die Dispo erfasst lokale Uhrzeiten, Crew speichert Schichtgrenzen in UTC. In der doppelt vorkommenden Stunde bei der Zeitumstellung verwendet die Eingabe das frühere Vorkommen.
 
-Betreibe Crew mit genau einer Anwendungsinstanz. Die einfache Anmeldebegrenzung verwendet die direkt verbundene IP-Adresse und das Konto. Hinter einem Reverse-Proxy zählt die Proxy-IP zum gemeinsamen Limit. Schütze Datenbank und Sicherungen durch passende Zugriffsrechte. [Sicherung und Wiederanlauf](sicherung.md)
+Betreibe Crew mit genau einer Anwendungsinstanz. Schütze Datenbank und Sicherungen durch passende Zugriffsrechte. [Sicherung und Wiederanlauf](sicherung.md)
+
+## HTTPS hinter einem Reverse-Proxy
+
+Beende TLS am Reverse-Proxy und setze `CREW_ORIGIN` auf seine HTTPS-Origin. Crew erstellt dafür sichere Sitzungscookies. Halte den HTTP-Upstream nur für den Proxy erreichbar und leite Browser auf HTTPS um. Setze `CREW_TRUSTED_PROXY` nur auf die einzelne IP-Adresse, mit der sich der unmittelbar vorgeschaltete Proxy bei Crew meldet. Bei nativer Installation mit einem Proxy auf demselben Host kann das `127.0.0.1` sein. In Compose kann sich die intern sichtbare Adresse von der Hostadresse unterscheiden.
+
+Der vertrauenswürdige Proxy überschreibt `X-Forwarded-For` mit genau der Client-IP. Ein Nginx-Abschnitt für einen nativen Crew-Dienst auf demselben Rechner kann so aussehen:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+}
+```
+
+Crew verwendet die Client-IP zusammen mit dem Konto für die Anmeldebegrenzung. Ohne konfigurierten vertrauenswürdigen Proxy oder bei einem ungültigen weitergeleiteten Wert verwendet Crew die direkt verbundene IP. Direkte Verbindungen aus dem öffentlichen Netz gehören nicht an den HTTP-Upstream.
+
+## Selbstregistrierung pausieren
+
+Mit `CREW_REGISTRATION=paused` und einem Neustart nimmt Crew keine neuen Selbstregistrierungen an. Bestehende Konten können sich weiter anmelden. Setze den Wert auf `open`, um den Bewerberzugang wieder zu öffnen.
+
+`node scripts/check-proxy.mjs` prüft den synthetischen HTTPS-Proxy, die abgeschaltete Registrierung und die Anmeldebegrenzung auf einem lokalen Prüfstand. Die Probe benötigt OpenSSL. Unter Windows kann `CREW_OPENSSL` auf dessen ausführbare Datei zeigen.

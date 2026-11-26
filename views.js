@@ -20,12 +20,12 @@ const statusTone = { pending: "warning", active: "ok", rejected: "danger", inter
 const status = state => `<span class="status ${statusTone[state] ?? "neutral"}"><span aria-hidden="true"></span>${statusLabel[state]}</span>`;
 const alert = message => message ? `<p class="form-error" role="alert">${esc(message)}</p>` : "";
 
-function page(user, title, content) {
+function page(user, title, content, registrationOpen = true) {
   const admin = user?.role === "admin";
   const nav = admin ? `<a href="/dispo#personal">Personal</a><a href="/dispo#einsaetze">Einsätze</a>`
     : user?.status === "active" ? `<a href="/#schichten">Schichten</a><a href="/#bewerbungen">Bewerbungen</a><a href="/#profil">Profil</a>`
       : user ? `<a href="/#bewerbungen">Bewerbung</a><a href="/#profil">Profil</a>`
-      : `<a href="/anmelden">Anmelden</a><a href="/registrieren">Registrieren</a>`;
+      : '<a href="/anmelden">Anmelden</a>' + (registrationOpen ? '<a href="/registrieren">Registrieren</a>' : "");
   return `<!doctype html><html lang="de"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${esc(title)} · Crew</title><link rel="stylesheet" href="/crew.css">
@@ -38,11 +38,12 @@ function page(user, title, content) {
     <main id="inhalt" tabindex="-1">${content}</main></body></html>`;
 }
 
-function auth(path, message, values) {
-  const registering = path === "/registrieren";
+function auth(path, message, values, registrationOpen) {
+  const registering = path === "/registrieren" && registrationOpen;
   const title = registering ? "Für den Personalpool bewerben" : "Bei Crew anmelden";
   return page(null, title, `<div class="narrow"><h1>${title}</h1>
     ${registering ? "<p>Die Dispo prüft deine Bewerbung. Den Status und deine Nachweise siehst du anschließend im Portal.</p>" : ""}
+    ${path === "/registrieren" && !registrationOpen ? "<p>Die Selbstregistrierung ist derzeit pausiert.</p>" : ""}
     ${alert(message)}
     ${post(registering ? "/registrieren" : "/anmelden", `
       ${registering ? label("Name", `<input name="name" maxlength="100" autocomplete="name" value="${esc(values?.get("name"))}" required>`) : ""}
@@ -51,7 +52,8 @@ function auth(path, message, values) {
         `<input type="password" name="password" ${registering ? 'minlength="12"' : ""} maxlength="128" autocomplete="${registering ? "new-password" : "current-password"}" required>`)}
       ${registering ? label("Verfügbarkeit (optional)", textarea("availability", 1000, values?.get("availability"))) : ""}
       ${button(registering ? "Bewerbung starten" : "Anmelden")}`)}
-    <p>${registering ? '<a href="/anmelden">Ich habe bereits ein Konto</a>' : '<a href="/registrieren">Für den Pool bewerben</a>'}</p></div>`);
+    ${registering ? '<p><a href="/anmelden">Ich habe bereits ein Konto</a></p>'
+      : registrationOpen ? '<p><a href="/registrieren">Für den Pool bewerben</a></p>' : ""}</div>`, registrationOpen);
 }
 
 function qualifications(db, person) {
@@ -286,7 +288,7 @@ function adminHome(db, user, timezone, failure) {
       ${shifts.filter(shift => shift.event === event.id).map(shift => planningShift(db, shift, staff, timezone)).join("")}</article>`).join("")}`, "einsaetze"));
 }
 
-export function render(db, user, timezone, path, message, failure) {
+export function render(db, user, timezone, path, message, failure, registrationOpen = true) {
   if (message && failure?.form) {
     if (user?.role === "admin" && failure.path === "/dispo/kontozugang") {
       const person = Number(failure.form.get("person"));
@@ -303,7 +305,7 @@ export function render(db, user, timezone, path, message, failure) {
         return adminHome(db, user, timezone, { event, form: failure.form, message });
       }
     }
-    if (!user && ["/anmelden", "/registrieren"].includes(failure.path)) return auth(failure.path, message, failure.form);
+    if (!user && ["/anmelden", "/registrieren"].includes(failure.path)) return auth(failure.path, message, failure.form, registrationOpen);
     if (user?.role === "staff" && user.status === "active" && failure.path === "/interesse") {
       const shift = Number(failure.form.get("shift"));
       if (Number.isSafeInteger(shift)) {
@@ -313,7 +315,7 @@ export function render(db, user, timezone, path, message, failure) {
     }
   }
   if (message) return page(user, "Hinweis", `<div class="narrow"><h1>Hinweis</h1><p role="alert">${esc(message)}</p>
-    <a href="${user?.role === "admin" ? "/dispo" : "/"}">Zur Übersicht</a></div>`);
-  if (!user) return auth(path);
+    <a href="${user?.role === "admin" ? "/dispo" : "/"}">Zur Übersicht</a></div>`, registrationOpen);
+  if (!user) return auth(path, undefined, undefined, registrationOpen);
   return user.role === "admin" ? adminHome(db, user, timezone) : staffHome(db, user, timezone);
 }

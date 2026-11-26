@@ -7,6 +7,7 @@ import {
   qualificationName, requireInput, respond, sessionHash, transaction, updatePoolAccess, verifyPasswordLength,
 } from "./model.js";
 import { render, renderEvidence, renderShift } from "./views.js";
+import { clientAddress, webConfig } from "./web-config.js";
 
 const lifetime = 12 * 60 * 60;
 const maxBody = 2_200_000;
@@ -115,11 +116,11 @@ function saveSession(db, res, { id, secret }, token, secure) {
   cookie(res, nextToken, secure);
 }
 
-function submitAccount({ db, req, res, token, path, form, secure, limit }) {
+function submitAccount({ db, client, res, token, path, form, secure, limit }) {
   const email = normalizeEmail(field(form, "email", 254));
   const password = form.get("password");
   requireInput(typeof password === "string" && password.length <= 128, "Anmeldedaten prüfen.");
-  const clearAccountLimit = limit(req.socket.remoteAddress, email);
+  const clearAccountLimit = limit(client, email);
   if (path === "/registrieren") {
     verifyPasswordLength(password);
     const name = field(form, "name", 100);
@@ -286,14 +287,16 @@ async function submit(context) {
   return user.role === "staff" ? submitStaff({ ...context, user }) : submitPlanning(context);
 }
 
-export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }) {
+export function createApp({ db, origin, trustedProxy = "", registrationOpen = true, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }) {
   const secure = origin.startsWith("https:");
   const limit = authLimit();
+  const page = (user, path, message, failure) => render(db, user, timezone, path, message, failure, registrationOpen);
   return createServer({ requestTimeout: 30_000 }, async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
     res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
     res.setHeader("Cache-Control", "no-store");
+    if (secure) res.setHeader("Strict-Transport-Security", "max-age=31536000");
     const token = /(?:^|;\s*)crew_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie ?? "")?.[1];
     let user;
     let path;
@@ -315,9 +318,10 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
       let status = 200;
       if (req.method === "POST") {
         requireInput(req.headers.origin === origin, "Der Ursprung des Formulars stimmt nicht. Öffne Crew über seine konfigurierte Adresse.");
+        requireInput(registrationOpen || path !== "/registrieren", "Die Selbstregistrierung ist derzeit pausiert.");
         requireInput(user || path === "/anmelden" || path === "/registrieren", "Bitte melde dich an.");
         form = await readForm(req);
-        const destination = await submit({ db, req, res, token, path, form, secure, timezone, limit });
+        const destination = await submit({ db, client: clientAddress(req, trustedProxy), res, token, path, form, secure, timezone, limit });
         if (destination) return redirect(res, destination);
         user = findUser(db, token);
         status = 404;
@@ -332,19 +336,19 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
           if (user?.role === "admin" && path !== "/dispo") return redirect(res, "/dispo");
           if (path === "/dispo" && user?.role !== "admin") return redirect(res, "/");
           if (user?.role === "staff" && path !== "/") return redirect(res, "/");
-          body = render(db, user, timezone, path);
+          body = page(user, path);
         }
         if (!body) status = 404;
       } else {
         status = 405;
       }
       res.writeHead(status, { "Content-Type": "text/html; charset=utf-8" })
-        .end(body ?? render(db, user, timezone, "/fehler", "Die Seite ist nicht verfügbar."));
+        .end(body ?? page(user, "/fehler", "Die Seite ist nicht verfügbar."));
     } catch (error) {
       const input = error instanceof InputError;
       if (!input) console.error("Crew-Anfrage fehlgeschlagen.", error.code ?? error.name);
       res.writeHead(input ? 422 : 500, { "Content-Type": "text/html; charset=utf-8" })
-        .end(render(db, input ? findUser(db, token) : undefined, timezone, "/fehler",
+        .end(page(input ? findUser(db, token) : undefined, "/fehler",
           input ? error.message : "Die Anfrage konnte nicht abgeschlossen werden.", input ? { path, form } : undefined));
     }
   });
@@ -352,14 +356,9 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.env.TZ ||= "Europe/Berlin";
-  const port = Number(process.env.PORT || 8080);
-  const host = process.env.HOST || "127.0.0.1";
-  const address = new URL(process.env.CREW_ORIGIN || `http://localhost:${port}`);
-  if (!["http:", "https:"].includes(address.protocol) || address.href !== address.origin + "/") {
-    throw new Error("CREW_ORIGIN muss eine HTTP(S)-Origin ohne Pfad sein.");
-  }
+  const { port, host, ...configuration } = webConfig(process.env);
   const db = openDatabase();
-  const server = createApp({ db, origin: address.origin });
+  const server = createApp({ db, ...configuration });
   server.listen(port, host, () => console.log("Crew ist bereit."));
   for (const signal of ["SIGTERM", "SIGINT"]) {
     process.once(signal, () => server.close(() => db.close()));

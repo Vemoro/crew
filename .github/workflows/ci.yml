@@ -26,6 +26,8 @@ jobs:
         env:
           TZ: Europe/Berlin
         run: npm test
+      - name: HTTPS-Proxy und Registrierung prüfen
+        run: node scripts/check-proxy.mjs
       - name: Codegröße und Abstandsraster prüfen
         run: |
           npm ci
