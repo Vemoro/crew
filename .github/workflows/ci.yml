@@ -26,10 +26,12 @@ jobs:
         env:
           TZ: Europe/Berlin
         run: npm test
-      - name: Browser bereitstellen
+      - name: Codegröße und Abstandsraster prüfen
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          npm run lint
+      - name: Browser bereitstellen
+        run: npx playwright install --with-deps chromium
       - name: Bedienung prüfen und Ansichten aufnehmen
         env:
           TZ: Europe/Berlin

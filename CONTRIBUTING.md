@@ -18,4 +18,4 @@ Der fiktive Bericht „Eine abgesagte Schicht bleibt besetzt“ braucht einen sy
 2. Erstelle für deinen Beitrag einen Branch in deinem Fork. Wenn du Schreibzugriff auf Crew hast, kannst du auch einen Branch im Crew-Repository verwenden. Führe die passenden Prüfungen mit synthetischen Daten aus. Bei Änderungen an der Oberfläche gehören vergleichbare Vorher- und Nachher-Bilder zum PR. [Prüfbefehle und Screenshot-Workflow](docs/entwicklung.md#befehle-und-screenshot-workflow)
 3. Nutze die PR-Vorlage für Ergebnis, Issue, Prüfnachweise und Updatehinweise. Kennzeichne wesentliche KI-Unterstützung. Die Entwicklungsdoku beschreibt den Ablauf für Entwurf, Selbstprüfung, unabhängiges Review, CI und Freigabe. [Pull Requests](docs/entwicklung.md#pull-requests) · [Review und Freigabe](docs/entwicklung.md#änderungen-prüfen)
 
-Für den Einsatz von Coding-Agenten gilt [AGENTS.md](AGENTS.md).
+Für Beiträge gelten die [Codegrößenregeln](docs/entwicklung.md#codegröße-und-aufräumen) und bei betroffener Oberfläche die [Gestaltungsregeln](DESIGN.md). Für den Einsatz von Coding-Agenten gilt [AGENTS.md](AGENTS.md).

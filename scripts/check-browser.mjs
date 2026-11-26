@@ -126,10 +126,25 @@ try {
   await show(admin, "dispo-hell");
   await admin.emulateMedia({ colorScheme: "dark" });
   await show(admin, "dispo-dunkel");
-  await staffMobile.getByRole("button", { name: "Einsatz absagen" }).click();
+  const cancelButton = staffMobile.getByRole("button", { name: "Einsatz absagen", exact: true });
+  assert.ok((await cancelButton.boundingBox()).height >= 44);
+  await cancelButton.click();
+  const cancelDialog = staffMobile.getByRole("dialog", { name: "Einsatz absagen?" });
+  await cancelDialog.getByText("Dein Platz wird wieder frei.", { exact: false }).waitFor();
+  const keepShift = cancelDialog.getByRole("button", { name: "Abbrechen" });
+  assert.equal(await keepShift.evaluate(field => document.activeElement === field), true);
+  await staffMobile.keyboard.press("Escape");
+  assert.equal(await cancelButton.evaluate(field => document.activeElement === field), true);
+  assert.match(await staffMobile.locator(".overview").innerText(), /80,00\s€/);
+  await cancelButton.click();
+  await staffMobile.keyboard.press("Tab");
+  const confirmCancellation = cancelDialog.getByRole("button", { name: "Absage bestätigen" });
+  assert.equal(await confirmCancellation.evaluate(field => document.activeElement === field), true);
+  await show(staffMobile, "absage-handy-hell");
+  await confirmCancellation.click();
   await staffMobile.getByText("Zurückgezogen", { exact: true }).waitFor();
   assert.match(await staffMobile.locator(".overview").innerText(), /0,00\s€/);
-  console.log("Browser: Bewerbung, Tastatur, Einladungsdialog, Pflichtfrage, Bestätigung, Vergütung, Absage und sechs Ansichten geprüft.");
+  console.log("Browser: Bewerbung, Tastatur, Einladung, Pflichtfrage, Besetzung, Vergütung und Absagedialog geprüft. Sieben Ansichten gespeichert.");
 } finally {
   await browser.close();
   app.close();

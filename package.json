@@ -10,10 +10,12 @@
   "scripts": {
     "start": "node server.js",
     "admin": "node admin.js",
+    "lint": "node scripts/check-source.mjs && biome lint --diagnostic-level=info",
     "test": "node --test",
     "test:browser": "node scripts/check-browser.mjs"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "playwright": "1.65.1"
   }
 }
