@@ -44,4 +44,7 @@ jobs:
       - name: Container bauen
         run: docker build -t crew-ci .
       - name: Quellpaket prüfen
-        run: python3 scripts/package-release-source.py "$GITHUB_SHA" "$RUNNER_TEMP/crew-source"
+        run: |
+          set -euo pipefail
+          python3 scripts/package-release-source.py "$GITHUB_SHA" "$RUNNER_TEMP/crew-source"
+          bash scripts/check-release-source.sh "$RUNNER_TEMP"/crew-source/crew-*
