@@ -9,6 +9,7 @@ import {
 import { render, renderEvidence, renderShift } from "./views.js";
 import { clientAddress, webConfig } from "./web-config.js";
 import { cancelShift, correctEvent, releasePlace } from "./planning.js";
+import { requestQualification, reviewQualification, submitQualification } from "./qualifications.js";
 
 const lifetime = 12 * 60 * 60;
 const maxBody = 2_200_000;
@@ -161,13 +162,7 @@ async function submitStaff({ db, user, token, path, form, timezone }) {
     transaction(db, () => {
       const current = findUser(db, token);
       requireInput(current && current.status !== "rejected", "Du kannst derzeit keine Nachweise einreichen.");
-      const { count } = db.prepare("SELECT count(*) AS count FROM qualifications WHERE person=?").get(user.id);
-      const existing = db.prepare("SELECT 1 FROM qualifications WHERE person=? AND name=?").get(user.id, name);
-      requireInput(existing || count < 30, "Du hast bereits 30 Qualifikationen erfasst.");
-      db.prepare(`INSERT INTO qualifications (person,name,valid_until,evidence) VALUES (?,?,?,?)
-        ON CONFLICT(person,name) DO UPDATE SET valid_until=excluded.valid_until, evidence=excluded.evidence,
-          verified=0, revision=qualifications.revision+1`)
-        .run(user.id, name, validUntil, evidence);
+        submitQualification(db, user.id, name, validUntil, evidence);
     });
     return "/#profil";
   }
@@ -233,11 +228,14 @@ function submitPlanning({ db, path, form, timezone }) {
       .run(status, field(form, "note", 1000, false), id(form, "person"));
     return "/dispo#personal";
   }
-  if (path === "/dispo/nachweis") {
-    const result = db.prepare("UPDATE qualifications SET verified=1 WHERE id=? AND revision=?")
-      .run(id(form, "qualification"), id(form, "revision"));
-    requireInput(result.changes === 1, "Der Nachweis hat sich geändert. Bitte öffne und prüfe den aktuellen Eintrag.");
+  if (path === "/dispo/nachweis" || path === "/dispo/nachweis-zuruecknehmen") {
+    reviewQualification(db, id(form, "qualification"), id(form, "revision"), path === "/dispo/nachweis" ? 1 : 0);
     return "/dispo#personal";
+  }
+  if (path === "/dispo/nachforderung") {
+    const person = id(form, "person");
+    requestQualification(db, person, qualificationName(field(form, "name", 100)), field(form, "note", 1000));
+    return `/dispo#person-${person}`;
   }
   if (path === "/dispo/einsatz") {
     const created = db.prepare("INSERT INTO events (title,location,reference,instructions) VALUES (?,?,?,?)").run(

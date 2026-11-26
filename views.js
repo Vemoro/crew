@@ -14,6 +14,7 @@ const statusLabel = { pending: "In Prüfung", active: "Im Pool", rejected: "Abge
 const statusTone = { pending: "warning", active: "ok", rejected: "danger", interested: "info", assigned: "ok", draft: "draft" };
 const status = state => `<span class="status ${statusTone[state] ?? "neutral"}"><span aria-hidden="true"></span>${statusLabel[state]}</span>`;
 const alert = message => message ? `<p class="form-error" role="alert">${esc(message)}</p>` : "";
+const requestState = { open: "Nachweis angefordert", submitted: "In Prüfung", done: "Erledigt" };
 
 function page(user, title, content, registrationOpen = true) {
   const admin = user?.role === "admin";
@@ -61,9 +62,23 @@ function qualificationList(db, person, admin = false) {
   return rows.length ? `<ul class="items">${rows.map(q => `<li><strong>${esc(q.name)}</strong>
     <span class="muted">${q.verified ? "Geprüft" : "Prüfung offen"}${q.valid_until ? " · Gültig bis " + esc(q.valid_until) : ""}</span>
     ${q.has_evidence ? `<a href="/nachweis/${q.id}">PDF herunterladen</a>` : ""}
-    ${admin && !q.verified ? post("/dispo/nachweis", hidden("qualification", q.id) + hidden("revision", q.revision)
-      + button("Als geprüft markieren")) : ""}
+    ${admin ? post(q.verified ? "/dispo/nachweis-zuruecknehmen" : "/dispo/nachweis",
+      hidden("qualification", q.id) + hidden("revision", q.revision)
+      + button(q.verified ? "Prüfung zurücknehmen" : "Als geprüft markieren"), q.verified ? 'class="secondary"' : "") : ""}
     </li>`).join("")}</ul>` : empty("Noch keine Qualifikationen eingetragen.");
+}
+
+function qualificationRequests(db, person) {
+  const entries = db.prepare("SELECT name,note,state FROM qualification_requests WHERE person=? ORDER BY state='done',name").all(person);
+  return entries.length ? `<ul class="items">${entries.map(entry => `<li><strong>${esc(entry.name)}</strong>
+    <span class="muted">${requestState[entry.state]}</span><p class="preserve">${esc(entry.note)}</p></li>`).join("")}</ul>` : "";
+}
+
+function requestQualificationForm(person) {
+  return `<details><summary>Nachweis anfordern</summary>${post("/dispo/nachforderung", hidden("person", person.id)
+    + label("Bezeichnung (wie im Personalnachweis)", '<input name="name" maxlength="100" required>')
+    + label("Anforderung für das Personalportal", textarea("note", 1000, "", true))
+    + button("Nachweis anfordern"))}</details>`;
 }
 
 export function renderEvidence(db, res, user, id) {
@@ -148,7 +163,7 @@ function staffHome(db, user, timezone) {
     + box("Meine Rückmeldungen", shiftList([...responses, ...cancelledInvites], timezone, shift =>
       `<p>${status(stateFor(shift))}</p>${stateFor(shift) === "interested" ? withdraw(shift) : ""}`)
       || empty("Deine Bewerbungen und Zusagen erscheinen hier."), "bewerbungen")
-    + box("Aufgaben", (user.review_note ? `<p>${esc(user.review_note)}</p>` : "")
+    + box("Aufgaben", qualificationRequests(db, user.id) + (user.review_note ? `<p>${esc(user.review_note)}</p>` : "")
       + (tasks.length ? `<ul>${tasks.join("")}</ul>` : empty("Für deine offenen Einsatzbewerbungen fehlen keine Qualifikationen.")))
     + profile);
 }
@@ -197,6 +212,8 @@ function staffReview(db, person, failure) {
     ${alert(failure?.message)}
     <p>${esc(person.email)}</p><p class="preserve">${esc(person.availability || "Keine typische Verfügbarkeit hinterlegt.")}</p>
     ${qualificationList(db, person.id, true)}
+    ${qualificationRequests(db, person.id)}
+    ${person.status === "active" && !person.access_suspended ? requestQualificationForm(person) : ""}
     ${person.status !== "active" ? post("/dispo/freigabe", hidden("person", person.id)
       + label("Rückmeldung an die Person (optional)", textarea("note", 1000, person.review_note))
       + label("Entscheidung", `<select name="status"><option value="pending">In Prüfung belassen</option>
@@ -235,6 +252,7 @@ function planningShift(db, shift, staff, timezone, failure) {
       const answers = JSON.parse(response.answers);
       return `<li><strong>${esc(response.name)}</strong> ${status(response.released_by_dispo ? "released" : response.status)}
       ${response.status === "assigned" && isUpcoming && response.access_suspended ? '<p>Zugang gesperrt. Besetzung prüfen.</p>' : ""}
+      ${response.status === "assigned" && isUpcoming && missing.length ? `<p>Besetzung prüfen. Fehlende geprüfte Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${answers.length ? `<dl>${answers.map((answer, index) => `<dt>${esc(questions[index])}</dt><dd>${esc(answer)}</dd>`).join("")}</dl>` : ""}
       ${response.status === "interested" && missing.length ? `<p>Fehlende Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${response.status === "interested" && isUpcoming && !response.access_suspended && !missing.length && shift.filled < shift.slots
@@ -311,6 +329,14 @@ export function render(db, user, timezone, path, message, failure, registrationO
       const person = Number(failure.form.get("person"));
       if (Number.isSafeInteger(person) && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff'").get(person)) {
         return adminHome(db, user, timezone, { person, message });
+      }
+    }
+    if (user?.role === "admin" && ["/dispo/nachforderung", "/dispo/nachweis", "/dispo/nachweis-zuruecknehmen"].includes(failure.path)) {
+      const key = Number(failure.form.get(failure.path === "/dispo/nachforderung" ? "person" : "qualification"));
+      if (Number.isSafeInteger(key)) {
+        const person = failure.path === "/dispo/nachforderung" ? key
+          : db.prepare("SELECT person FROM qualifications WHERE id=?").get(key)?.person;
+        if (person) return adminHome(db, user, timezone, { person, message });
       }
     }
     if (user?.role === "admin" && failure.path === "/dispo/einsatz") {
