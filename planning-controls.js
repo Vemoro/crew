@@ -1,10 +1,12 @@
 import { button, esc, hidden, label, post, textarea } from "./forms.js";
 
-export function correctionForm(event, futureCount, failure) {
+export function correctionForm(event, upcoming, failure) {
   const values = failure?.form;
   return `<details ${failure ? "open" : ""}><summary>Ort und Hinweise korrigieren</summary>
     ${failure ? `<p class="form-error" role="alert">${esc(failure.message)}</p>` : ""}
-    <p>Die Änderung gilt für ${futureCount} bevorstehende Schichten. Begonnene und vergangene Schichten behalten ihre bisherigen Angaben.</p>
+    ${upcoming.length ? `<p>Die Änderung betrifft diese Schichten</p><ul>${upcoming.map(shift => `<li>${esc(shift)}</li>`).join("")}</ul>`
+      : "<p>Derzeit sind keine bevorstehenden Schichten betroffen.</p>"}
+    <p>Begonnene, vergangene und zurückgenommene Schichten behalten ihre bisherigen Angaben.</p>
     ${post("/dispo/einsatz-korrigieren", hidden("event", event.id) + hidden("revision", event.revision)
       + label("Korrigierter Ort", `<input name="location" required maxlength="180" value="${esc(values?.get("location") ?? event.location)}">`)
       + label("Korrigierter Treffpunkt und Hinweise", textarea("instructions", 2000, values?.get("instructions") ?? event.instructions))

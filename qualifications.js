@@ -22,10 +22,12 @@ export function reviewQualification(db, qualification, revision, verified) {
 }
 
 export function requestQualification(db, person, name, note) {
-  requireInput(db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff' AND status='active' AND access_suspended=0").get(person),
-    "Eine Nachforderung benötigt ein aktives Poolmitglied.");
-  const change = db.prepare(`INSERT INTO qualification_requests (person,name,note,state) VALUES (?,?,?,'open')
-    ON CONFLICT(person,name) DO UPDATE SET note=excluded.note,state='open' WHERE qualification_requests.state='done'`)
-    .run(person, name, note);
-  requireInput(change.changes === 1, "Für diesen Nachweis läuft bereits eine Nachforderung.");
+  transaction(db, () => {
+    requireInput(db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff' AND status='active' AND access_suspended=0").get(person),
+      "Eine Nachforderung benötigt ein aktives Poolmitglied.");
+    const change = db.prepare(`INSERT INTO qualification_requests (person,name,note,state) VALUES (?,?,?,'open')
+      ON CONFLICT(person,name) DO UPDATE SET note=excluded.note,state='open' WHERE qualification_requests.state='done'`)
+      .run(person, name, note);
+    requireInput(change.changes === 1, "Für diesen Nachweis läuft bereits eine Nachforderung.");
+  });
 }

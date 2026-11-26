@@ -74,10 +74,10 @@ function qualificationRequests(db, person) {
     <span class="muted">${requestState[entry.state]}</span><p class="preserve">${esc(entry.note)}</p></li>`).join("")}</ul>` : "";
 }
 
-function requestQualificationForm(person) {
-  return `<details><summary>Nachweis anfordern</summary>${post("/dispo/nachforderung", hidden("person", person.id)
-    + label("Bezeichnung (wie im Personalnachweis)", '<input name="name" maxlength="100" required>')
-    + label("Anforderung für das Personalportal", textarea("note", 1000, "", true))
+function requestQualificationForm(person, failedForm) {
+  return `<details ${failedForm ? "open" : ""}><summary>Nachweis anfordern</summary>${post("/dispo/nachforderung", hidden("person", person.id)
+    + label("Bezeichnung (wie im Personalnachweis)", `<input name="name" maxlength="100" required value="${esc(failedForm?.get("name"))}">`)
+    + label("Anforderung für das Personalportal", textarea("note", 1000, failedForm?.get("note"), true))
     + button("Nachweis anfordern"))}</details>`;
 }
 
@@ -213,7 +213,7 @@ function staffReview(db, person, failure) {
     <p>${esc(person.email)}</p><p class="preserve">${esc(person.availability || "Keine typische Verfügbarkeit hinterlegt.")}</p>
     ${qualificationList(db, person.id, true)}
     ${qualificationRequests(db, person.id)}
-    ${person.status === "active" && !person.access_suspended ? requestQualificationForm(person) : ""}
+    ${person.status === "active" && !person.access_suspended ? requestQualificationForm(person, failure?.requestForm) : ""}
     ${person.status !== "active" ? post("/dispo/freigabe", hidden("person", person.id)
       + label("Rückmeldung an die Person (optional)", textarea("note", 1000, person.review_note))
       + label("Entscheidung", `<select name="status"><option value="pending">In Prüfung belassen</option>
@@ -226,7 +226,9 @@ function planningShift(db, shift, staff, timezone, failure) {
     WHERE r.shift=? ORDER BY CASE r.status WHEN 'assigned' THEN 0 WHEN 'interested' THEN 1 ELSE 2 END, p.name`).all(shift.id);
   const questions = JSON.parse(shift.questions);
   const requirements = JSON.parse(shift.requirements);
-  const isUpcoming = shift.starts > new Date().toISOString() && !shift.cancelled_at;
+  const now = new Date().toISOString();
+  const isUpcoming = shift.starts > now && !shift.cancelled_at;
+  const needsQualification = shift.ends > now && !shift.cancelled_at;
   const invitations = staff.filter(person => person.status === "active" && !person.access_suspended);
   const invitationNames = db.prepare(`SELECT p.name FROM invitations i JOIN people p ON p.id=i.person
     WHERE i.shift=? ORDER BY p.name`).all(shift.id);
@@ -252,7 +254,7 @@ function planningShift(db, shift, staff, timezone, failure) {
       const answers = JSON.parse(response.answers);
       return `<li><strong>${esc(response.name)}</strong> ${status(response.released_by_dispo ? "released" : response.status)}
       ${response.status === "assigned" && isUpcoming && response.access_suspended ? '<p>Zugang gesperrt. Besetzung prüfen.</p>' : ""}
-      ${response.status === "assigned" && isUpcoming && missing.length ? `<p>Besetzung prüfen. Fehlende geprüfte Nachweise: ${esc(missing.join(", "))}</p>` : ""}
+      ${response.status === "assigned" && needsQualification && missing.length ? `<p>Besetzung prüfen. Fehlende geprüfte Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${answers.length ? `<dl>${answers.map((answer, index) => `<dt>${esc(questions[index])}</dt><dd>${esc(answer)}</dd>`).join("")}</dl>` : ""}
       ${response.status === "interested" && missing.length ? `<p>Fehlende Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${response.status === "interested" && isUpcoming && !response.access_suspended && !missing.length && shift.filled < shift.slots
@@ -292,7 +294,8 @@ function adminHome(db, user, timezone, failure) {
     ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000, values?.get("instructions")))}
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
-    ${failure?.event ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.event ? `<p><a href="#event-${failure.event}">${failure.type === "correction"
+      ? "Zur Korrektur" : "Zum Schichtformular"} mit der Fehlermeldung</a></p>` : ""}
     ${failure?.shift ? `<p><a href="#shift-${failure.shift}">Zur Schicht mit der Fehlermeldung</a></p>` : ""}
     ${failure?.person ? `<p><a href="#person-${failure.person}">Zum Personalprofil mit der Fehlermeldung</a></p>` : ""}
     ${eventFailure ? '<p><a href="#neuer-einsatz">Zum Einsatzformular mit der Fehlermeldung</a></p>' : ""}
@@ -304,7 +307,8 @@ function adminHome(db, user, timezone, failure) {
     + box("Einsätze", `<details id="neuer-einsatz" ${!events.length || eventFailure ? "open" : ""}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
       ${esc(event.location)}${event.reference ? " · " + esc(event.reference) : ""}</p>
-      ${correctionForm(event, shifts.filter(shift => shift.event === event.id && !shift.cancelled_at && shift.starts > new Date().toISOString()).length,
+      ${correctionForm(event, shifts.filter(shift => shift.event === event.id && !shift.cancelled_at && shift.starts > new Date().toISOString())
+        .map(shift => `${shift.title} · ${date(shift.starts, timezone)}`),
         failure?.type === "correction" && failure.event === event.id ? failure : undefined)}
       ${shiftForm(event, timezone, failure?.event === event.id && failure.type !== "correction" ? failure : undefined)}
       ${shifts.filter(shift => shift.event === event.id).map(shift => planningShift(db, shift, staff, timezone,
@@ -336,7 +340,10 @@ export function render(db, user, timezone, path, message, failure, registrationO
       if (Number.isSafeInteger(key)) {
         const person = failure.path === "/dispo/nachforderung" ? key
           : db.prepare("SELECT person FROM qualifications WHERE id=?").get(key)?.person;
-        if (person) return adminHome(db, user, timezone, { person, message });
+        if (person && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff'").get(person)) {
+          const requestForm = failure.path === "/dispo/nachforderung" ? failure.form : undefined;
+          return adminHome(db, user, timezone, { person, message, requestForm });
+        }
       }
     }
     if (user?.role === "admin" && failure.path === "/dispo/einsatz") {
