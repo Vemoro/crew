@@ -14,6 +14,14 @@ Nutze vorhandene Komponenten und Abläufe, wenn ihr Verhalten passt. Halte Ände
 
 Behandle gespeicherte Geldbeträge in ganzen Cent. Prüfe bei Schreibvorgängen Wiederholungen, mögliche Konkurrenz und den Zustand nach einem Fehler. Ergänze beim Ändern der Datenbank eine neue Migration. Bereits angewendete Migrationen bleiben stabil. Änderungen an gespeicherten Daten brauchen eine Probe mit repräsentativem Altbestand und belegtem Wiederanlauf. Für die Oberfläche gelten die [Gestaltungsregeln](../DESIGN.md).
 
+### Codegröße und Aufräumen
+
+Eine Quelldatei hat einen fachlichen Schwerpunkt. Handgeschriebene JavaScript-, TypeScript- und CSS-Quelldateien bleiben bei höchstens 400 physischen Zeilen. Der Funktionsrumpf bleibt bei höchstens 80 Zeilen ohne Leerzeilen, gezählt nach Biomes Regel `noExcessiveLinesPerFunction`. Teile neue oder gewachsene Funktionen vor dem Merge entlang eines verständlichen Arbeitsschritts. Testdateien und der Browserprüflauf sind von den Codegrößenlimits ausgenommen. [Konventionen in Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/docs/entwicklung.md#konventionen)
+
+Räume überlange Funktionen, toten Code oder instabile Tests in den berührten Dateien auf, wenn das ohne größeren Umbau möglich ist. Ein Strukturumbau erhält bestehendes Verhalten. Nenne eine solche Änderung im PR. [Mitwirken bei Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/docs/mitwirken.md#automatische-prüfungen-der-regeln)
+
+`npm ci` installiert die Prüfwerkzeuge. `npm run lint` prüft Datei- und Funktionslänge sowie das CSS-Abstandsraster. Eine zu große Datei oder ein fester Abstand außerhalb des Rasters lässt den Check fehlschlagen. Biome meldet lange Funktionen als Hinweis. Dieselbe Prüfung läuft in CI. Crew startet ohne Ausnahmeliste für Quelldateien oder Rasterwerte.
+
 ## Issue-Review vor der Planung
 
 Ein umsetzbares Issue erklärt das konkrete Problem, belegt den aktuellen Stand und begründet die Lösungswahl. Die Abnahme nennt beobachtbare Ergebnisse und die Randfälle, die für den betroffenen Ablauf relevant sind. Umfang und Länge richten sich nach der Aufgabe. [Issue schreiben](../.agents/skills/crew-issue-schreiben/SKILL.md)

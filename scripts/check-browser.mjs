@@ -18,7 +18,7 @@ app.listen(port, "127.0.0.1");
 await once(app, "listening");
 const screenshotDirectory = process.env.CREW_SCREENSHOTS || "build/screenshots";
 mkdirSync(screenshotDirectory, { recursive: true });
-const show = (page, name) => page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage: true });
+const show = (page, name, fullPage = true) => page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
 
 try {
   const desktop = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
@@ -47,9 +47,14 @@ try {
   await admin.getByText("Mira Nord", { exact: false }).first().click();
   await admin.getByLabel("Entscheidung").selectOption("active");
   await admin.getByRole("button", { name: "Entscheidung speichern" }).click();
-  await admin.getByLabel("Einsatzname").fill("Stadtfest West");
+  await admin.getByLabel("Einsatzname").fill(" ");
   await admin.getByLabel("Ort", { exact: true }).fill("Musterhalle");
   await admin.getByLabel("Treffpunkt und Hinweise").fill("Treffpunkt Tor 4");
+  await admin.getByRole("button", { name: "Einsatz anlegen", exact: true }).click();
+  await admin.getByRole("alert").waitFor();
+  assert.equal(await admin.getByLabel("Ort", { exact: true }).inputValue(), "Musterhalle");
+  assert.equal(await admin.getByLabel("Treffpunkt und Hinweise").inputValue(), "Treffpunkt Tor 4");
+  await admin.getByLabel("Einsatzname").fill("Stadtfest West");
   await admin.getByRole("button", { name: "Einsatz anlegen", exact: true }).click();
   await admin.getByText("Schicht hinzufügen", { exact: true }).click();
   await admin.getByLabel("Schichtname").fill("Aufbau");
@@ -66,7 +71,9 @@ try {
   await admin.getByRole("button", { name: "Schichtentwurf speichern" }).click();
   await admin.getByRole("button", { name: "Schicht veröffentlichen" }).click();
   await staffMobile.goto(origin);
-  await staffMobile.getByText("Menü", { exact: true }).click();
+  const mobileMenu = staffMobile.getByText("Menü", { exact: true });
+  assert.ok((await mobileMenu.boundingBox()).height >= 44);
+  await mobileMenu.click();
   await staffMobile.getByRole("link", { name: "Schichten", exact: true }).click();
   await staffMobile.getByRole("link", { name: "Schicht ansehen" }).click();
   await staffMobile.getByLabel("An welchem Eingang wartest du?").fill("Tor 4");
@@ -126,10 +133,25 @@ try {
   await show(admin, "dispo-hell");
   await admin.emulateMedia({ colorScheme: "dark" });
   await show(admin, "dispo-dunkel");
-  await staffMobile.getByRole("button", { name: "Einsatz absagen" }).click();
+  const cancelButton = staffMobile.getByRole("button", { name: "Einsatz absagen", exact: true });
+  assert.ok((await cancelButton.boundingBox()).height >= 44);
+  await cancelButton.click();
+  const cancelDialog = staffMobile.getByRole("dialog", { name: "Einsatz absagen?" });
+  await cancelDialog.getByText("Dein Platz wird wieder frei.", { exact: false }).waitFor();
+  const keepShift = cancelDialog.getByRole("button", { name: "Abbrechen" });
+  assert.equal(await keepShift.evaluate(field => document.activeElement === field), true);
+  await staffMobile.keyboard.press("Escape");
+  assert.equal(await cancelButton.evaluate(field => document.activeElement === field), true);
+  assert.match(await staffMobile.locator(".overview").innerText(), /80,00\s€/);
+  await cancelButton.click();
+  await staffMobile.keyboard.press("Tab");
+  const confirmCancellation = cancelDialog.getByRole("button", { name: "Absage bestätigen" });
+  assert.equal(await confirmCancellation.evaluate(field => document.activeElement === field), true);
+  await show(staffMobile, "absage-handy-hell", false);
+  await confirmCancellation.click();
   await staffMobile.getByText("Zurückgezogen", { exact: true }).waitFor();
   assert.match(await staffMobile.locator(".overview").innerText(), /0,00\s€/);
-  console.log("Browser: Bewerbung, Tastatur, Einladungsdialog, Pflichtfrage, Bestätigung, Vergütung, Absage und sechs Ansichten geprüft.");
+  console.log("Browser: Bewerbung, Tastatur, Einladung, Pflichtfrage, Besetzung, Vergütung und Absagedialog geprüft. Sieben Ansichten gespeichert.");
 } finally {
   await browser.close();
   app.close();

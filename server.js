@@ -113,83 +113,88 @@ function saveSession(db, res, person, token, secure) {
   cookie(res, nextToken, secure);
 }
 
-async function submit({ db, req, res, token, path, form, secure, timezone, limit }) {
-  if (path === "/anmelden" || path === "/registrieren") {
-    const email = normalizeEmail(field(form, "email", 254));
-    const password = form.get("password");
-    requireInput(typeof password === "string" && password.length <= 128, "Anmeldedaten prüfen.");
-    const clearAccountLimit = limit(req.socket.remoteAddress, email);
-    if (path === "/registrieren") {
-      verifyPasswordLength(password);
-      const name = field(form, "name", 100);
-      const availability = field(form, "availability", 1000, false);
-      const result = db.prepare(`INSERT INTO people (email,name,secret,role,status,availability)
-        VALUES (?,?,?,'staff','pending',?) ON CONFLICT(email) DO NOTHING`).run(email, name, passwordHash(password), availability);
-      requireInput(result.changes === 1, "Registrierung nicht möglich. Wenn du bereits ein Konto hast, melde dich an.");
-      saveSession(db, res, result.lastInsertRowid, token, secure);
-      clearAccountLimit();
-      return "/";
-    }
-    const person = db.prepare("SELECT * FROM people WHERE email=?").get(email);
-    const valid = checkPassword(password, person?.secret ?? dummyPassword);
-    requireInput(person && valid, "E-Mail-Adresse oder Passwort stimmt nicht.");
-    saveSession(db, res, person.id, token, secure);
+function submitAccount({ db, req, res, token, path, form, secure, limit }) {
+  const email = normalizeEmail(field(form, "email", 254));
+  const password = form.get("password");
+  requireInput(typeof password === "string" && password.length <= 128, "Anmeldedaten prüfen.");
+  const clearAccountLimit = limit(req.socket.remoteAddress, email);
+  if (path === "/registrieren") {
+    verifyPasswordLength(password);
+    const name = field(form, "name", 100);
+    const availability = field(form, "availability", 1000, false);
+    const result = db.prepare(`INSERT INTO people (email,name,secret,role,status,availability)
+      VALUES (?,?,?,'staff','pending',?) ON CONFLICT(email) DO NOTHING`).run(email, name, passwordHash(password), availability);
+    requireInput(result.changes === 1, "Registrierung nicht möglich. Wenn du bereits ein Konto hast, melde dich an.");
+    saveSession(db, res, result.lastInsertRowid, token, secure);
     clearAccountLimit();
-    return homeFor(person);
-  }
-  const user = findUser(db, token);
-  requireInput(user, "Bitte melde dich an.");
-  if (path === "/abmelden") {
-    db.prepare("DELETE FROM sessions WHERE token=?").run(sessionHash(token));
-    cookie(res, "", secure);
     return "/";
   }
+  const person = db.prepare("SELECT * FROM people WHERE email=?").get(email);
+  const valid = checkPassword(password, person?.secret ?? dummyPassword);
+  requireInput(person && valid, "E-Mail-Adresse oder Passwort stimmt nicht.");
+  saveSession(db, res, person.id, token, secure);
+  clearAccountLimit();
+  return homeFor(person);
+}
 
-  if (user.role === "staff") {
-    if (path === "/verfuegbarkeit") {
-      db.prepare("UPDATE people SET availability=? WHERE id=?").run(field(form, "availability", 1000, false), user.id);
-      return "/#profil";
-    }
-    if (path === "/qualifikation") {
-      requireInput(user.status !== "rejected", "Deine Bewerbung wurde abgelehnt.");
-      const name = qualificationName(field(form, "name", 100));
-      const validUntil = expiration(field(form, "validUntil", 10, false));
-      const file = form.get("evidence");
-      let evidence = null;
-      if (file instanceof File && file.size) {
-        requireInput(file.size <= 2_000_000 && file.type === "application/pdf", "Erlaubt sind PDF-Dateien bis 2 MB.");
-        evidence = Buffer.from(await file.arrayBuffer());
-        requireInput(evidence.subarray(0, 5).toString() === "%PDF-", "Die Datei ist keine PDF-Datei.");
-      }
-      transaction(db, () => {
-        const current = findUser(db, token);
-        requireInput(current && current.status !== "rejected", "Du kannst derzeit keine Nachweise einreichen.");
-        const { count } = db.prepare("SELECT count(*) AS count FROM qualifications WHERE person=?").get(user.id);
-        const existing = db.prepare("SELECT 1 FROM qualifications WHERE person=? AND name=?").get(user.id, name);
-        requireInput(existing || count < 30, "Du hast bereits 30 Qualifikationen erfasst.");
-        db.prepare(`INSERT INTO qualifications (person,name,valid_until,evidence) VALUES (?,?,?,?)
-          ON CONFLICT(person,name) DO UPDATE SET valid_until=excluded.valid_until, evidence=excluded.evidence,
-            verified=0, revision=qualifications.revision+1`)
-          .run(user.id, name, validUntil, evidence);
-      });
-      return "/#profil";
-    }
-    if (!["/interesse", "/absagen"].includes(path)) return null;
-    requireInput(user.status === "active", "Die Dispo muss deine Bewerbung zuerst freigeben.");
-    if (path === "/interesse") {
-      const shift = id(form, "shift");
-      const answers = form.getAll("answer").map(value => typeof value === "string" ? value.trim() : "");
-      respond(db, shift, user.id, answers, timezone);
-      return "/#bewerbungen";
-    }
-    if (path === "/absagen") {
-      db.prepare(`UPDATE responses SET status='withdrawn' WHERE shift=? AND person=?
-        AND EXISTS (SELECT 1 FROM shifts WHERE id=responses.shift AND starts>?)`).run(id(form, "shift"), user.id, new Date().toISOString());
-      return "/#bewerbungen";
-    }
-    return null;
+async function submitStaff({ db, user, token, path, form, timezone }) {
+  if (path === "/verfuegbarkeit") {
+    db.prepare("UPDATE people SET availability=? WHERE id=?").run(field(form, "availability", 1000, false), user.id);
+    return "/#profil";
   }
+  if (path === "/qualifikation") {
+    requireInput(user.status !== "rejected", "Deine Bewerbung wurde abgelehnt.");
+    const name = qualificationName(field(form, "name", 100));
+    const validUntil = expiration(field(form, "validUntil", 10, false));
+    const file = form.get("evidence");
+    let evidence = null;
+    if (file instanceof File && file.size) {
+      requireInput(file.size <= 2_000_000 && file.type === "application/pdf", "Erlaubt sind PDF-Dateien bis 2 MB.");
+      evidence = Buffer.from(await file.arrayBuffer());
+      requireInput(evidence.subarray(0, 5).toString() === "%PDF-", "Die Datei ist keine PDF-Datei.");
+    }
+    transaction(db, () => {
+      const current = findUser(db, token);
+      requireInput(current && current.status !== "rejected", "Du kannst derzeit keine Nachweise einreichen.");
+      const { count } = db.prepare("SELECT count(*) AS count FROM qualifications WHERE person=?").get(user.id);
+      const existing = db.prepare("SELECT 1 FROM qualifications WHERE person=? AND name=?").get(user.id, name);
+      requireInput(existing || count < 30, "Du hast bereits 30 Qualifikationen erfasst.");
+      db.prepare(`INSERT INTO qualifications (person,name,valid_until,evidence) VALUES (?,?,?,?)
+        ON CONFLICT(person,name) DO UPDATE SET valid_until=excluded.valid_until, evidence=excluded.evidence,
+          verified=0, revision=qualifications.revision+1`)
+        .run(user.id, name, validUntil, evidence);
+    });
+    return "/#profil";
+  }
+  if (!["/interesse", "/absagen"].includes(path)) return null;
+  requireInput(user.status === "active", "Die Dispo muss deine Bewerbung zuerst freigeben.");
+  if (path === "/interesse") {
+    const shift = id(form, "shift");
+    const answers = form.getAll("answer").map(value => typeof value === "string" ? value.trim() : "");
+    respond(db, shift, user.id, answers, timezone);
+    return "/#bewerbungen";
+  }
+  if (path === "/absagen") {
+    const shift = id(form, "shift");
+    const revision = id(form, "revision");
+    const status = field(form, "status", 10);
+    requireInput(["interested", "assigned"].includes(status), "Antwortstatus prüfen.");
+    transaction(db, () => {
+      const updated = db.prepare(`UPDATE responses SET status='withdrawn'
+        WHERE shift=? AND person=? AND revision=? AND status=?
+        AND EXISTS (SELECT 1 FROM shifts WHERE id=responses.shift AND starts>?)`)
+        .run(shift, user.id, revision, status, new Date().toISOString());
+      if (updated.changes === 1) return;
+      const current = db.prepare("SELECT status, revision FROM responses WHERE shift=? AND person=?").get(shift, user.id);
+      requireInput(current?.status === "withdrawn" && current.revision === revision,
+        "Die Rückmeldung hat sich geändert oder die Schicht hat begonnen. Bitte prüfe den aktuellen Stand.");
+    });
+    return "/#bewerbungen";
+  }
+  return null;
+}
 
+function submitPlanning({ db, path, form, timezone }) {
   if (path === "/dispo/freigabe") {
     const status = field(form, "status", 10);
     requireInput(["active", "rejected", "pending"].includes(status), "Ungültiger Bewerbungsstatus.");
@@ -255,6 +260,20 @@ async function submit({ db, req, res, token, path, form, secure, timezone, limit
     return `/dispo#shift-${shift.id}`;
   }
   return null;
+}
+
+async function submit(context) {
+  const { db, res, token, path, secure } = context;
+  if (path === "/anmelden" || path === "/registrieren") return submitAccount(context);
+
+  const user = findUser(db, token);
+  requireInput(user, "Bitte melde dich an.");
+  if (path === "/abmelden") {
+    db.prepare("DELETE FROM sessions WHERE token=?").run(sessionHash(token));
+    cookie(res, "", secure);
+    return "/";
+  }
+  return user.role === "staff" ? submitStaff({ ...context, user }) : submitPlanning(context);
 }
 
 export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }) {

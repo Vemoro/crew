@@ -1,0 +1,17 @@
+{
+  "files": {
+    "includes": [
+      "**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.mts", "**/*.cts", "**/*.tsx",
+      "!test/**", "!tests/**", "!**/*.test.*", "!**/*.spec.*", "!scripts/check-browser.mjs"
+    ]
+  },
+  "formatter": { "enabled": false },
+  "linter": {
+    "rules": {
+      "preset": "none",
+      "complexity": {
+        "noExcessiveLinesPerFunction": { "level": "info", "options": { "maxLines": 80, "skipBlankLines": true } }
+      }
+    }
+  }
+}

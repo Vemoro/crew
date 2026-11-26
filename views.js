@@ -16,6 +16,8 @@ const empty = text => `<p class="muted">${text}</p>`;
 const statusLabel = { pending: "In Prüfung", active: "Im Pool", rejected: "Abgelehnt",
   interested: "Interesse gemeldet", assigned: "Eingeteilt", withdrawn: "Zurückgezogen",
   draft: "Entwurf", pool: "Im Pool sichtbar", invite: "Nur auf Einladung" };
+const statusTone = { pending: "warning", active: "ok", rejected: "danger", interested: "info", assigned: "ok", draft: "draft" };
+const status = state => `<span class="status ${statusTone[state] ?? "neutral"}"><span aria-hidden="true"></span>${statusLabel[state]}</span>`;
 const alert = message => message ? `<p class="form-error" role="alert">${esc(message)}</p>` : "";
 
 function page(user, title, content) {
@@ -27,7 +29,7 @@ function page(user, title, content) {
   return `<!doctype html><html lang="de"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${esc(title)} · Crew</title><link rel="stylesheet" href="/crew.css">
-    ${admin ? '<script src="/dialogs.js" type="module"></script>' : ""}</head><body>
+    ${user ? '<script src="/dialogs.js" type="module"></script>' : ""}</head><body>
     <a href="#inhalt" class="skip">Zum Inhalt</a>
     <header><div class="header-inner"><a class="brand" href="${admin ? "/dispo" : "/"}">Crew<span aria-hidden="true">.</span></a>
     <nav class="desktop-nav" aria-label="Hauptnavigation">${nav}</nav>
@@ -88,6 +90,20 @@ function shiftList(shifts, timezone, detail) {
     ${shiftFacts(shift, timezone)}${detail(shift)}</li>`).join("")}</ul>` : "";
 }
 
+function cancellation(shift, revision) {
+  const title = "Einsatz absagen?";
+  return `<div class="secondary">
+    <button type="button" data-open-dialog="cancel-${shift.id}">Einsatz absagen</button></div>
+    <dialog id="cancel-${shift.id}" aria-labelledby="cancel-title-${shift.id}" aria-describedby="cancel-effect-${shift.id}">
+    <h3 id="cancel-title-${shift.id}">${title}</h3>
+    <p><strong>${esc(shift.event_title)} · ${esc(shift.title)}</strong></p>
+    <p id="cancel-effect-${shift.id}">Dein Platz wird wieder frei. Die Schicht entfällt aus deiner erwarteten Vergütung.</p>
+    ${post("/absagen", hidden("shift", shift.id) + hidden("status", "assigned") + hidden("revision", revision) + `<div class="dialog-actions">
+      <button class="quiet" type="submit" formmethod="dialog" autofocus>Abbrechen</button>
+      <button class="danger" type="submit">Absage bestätigen</button></div>`)}
+    </dialog>`;
+}
+
 function staffHome(db, user, timezone) {
   const profileForm = post("/verfuegbarkeit", label("Typische Verfügbarkeit oder Hinweis", textarea("availability", 1000, user.availability))
     + button("Verfügbarkeit speichern"));
@@ -101,33 +117,35 @@ function staffHome(db, user, timezone) {
     + (user.status !== "rejected" ? qualificationForm : ""), "profil");
   const heading = `<p class="eyebrow">Personalportal</p><h1>Hallo, ${esc(user.name)}</h1>`;
   if (user.status !== "active") {
-    return page(user, "Meine Bewerbung", heading + box("Meine Bewerbung", `<p class="badge">${statusLabel[user.status]}</p>
+    return page(user, "Meine Bewerbung", heading + box("Meine Bewerbung", `<p>${status(user.status)}</p>
       ${user.review_note ? `<p>${esc(user.review_note)}</p>` : ""}`, "bewerbungen") + profile);
   }
   const now = new Date().toISOString();
   const responses = db.prepare(shiftQuery + ` JOIN responses r ON r.shift=s.id
     WHERE r.person=? ORDER BY s.starts`).all(user.id);
-  const responseState = new Map(db.prepare("SELECT shift, status FROM responses WHERE person=?").all(user.id)
-    .map(row => [row.shift, row.status]));
-  const upcoming = responses.filter(shift => shift.ends > now && responseState.get(shift.id) === "assigned");
+  const responsesByShift = new Map(db.prepare("SELECT shift, status, revision FROM responses WHERE person=?").all(user.id)
+    .map(response => [response.shift, response]));
+  const stateFor = shift => responsesByShift.get(shift.id)?.status;
+  const upcoming = responses.filter(shift => shift.ends > now && stateFor(shift) === "assigned");
   const open = db.prepare(shiftQuery + " WHERE s.starts>? AND s.visibility<>'draft' ORDER BY s.starts").all(now)
-    .filter(shift => canSee(db, shift, user.id) && !["assigned", "interested"].includes(responseState.get(shift.id)));
-  const interested = responses.filter(shift => responseState.get(shift.id) === "interested" && shift.starts > now);
+    .filter(shift => canSee(db, shift, user.id) && !["assigned", "interested"].includes(stateFor(shift)));
+  const interested = responses.filter(shift => stateFor(shift) === "interested" && shift.starts > now);
   const tasks = interested.flatMap(shift => missingQualifications(db, shift, user.id, "assign", timezone)
     .map(name => `<li>${esc(shift.title)} · ${esc(name)} prüfen lassen</li>`));
-  const abort = (shift, text) => shift.starts > now
-    ? post("/absagen", hidden("shift", shift.id) + button(text), 'class="secondary"') : "";
+  const withdraw = shift => shift.starts > now ? post("/absagen",
+    hidden("shift", shift.id) + hidden("status", "interested") + hidden("revision", responsesByShift.get(shift.id).revision)
+      + button("Interesse zurückziehen"), 'class="secondary"') : "";
   return page(user, "Meine Einsätze", heading
     + `<div class="overview"><div><span class="muted">Bevorstehende Schichten</span><strong>${upcoming.length}</strong></div>
     <div><span class="muted">Erwartete Vergütung</span><strong>${money(upcoming.reduce((sum, shift) => sum + shift.cents, 0))}</strong></div></div>`
     + box("Als Nächstes", shiftList(upcoming, timezone, shift =>
-      `<p class="preserve">${esc(shift.instructions)}</p>${abort(shift, "Einsatz absagen")}`) || empty("Du bist für keine bevorstehende Schicht eingeteilt."))
+      `<p class="preserve">${esc(shift.instructions)}</p>
+      ${shift.starts > now ? cancellation(shift, responsesByShift.get(shift.id).revision) : ""}`) || empty("Du bist für keine bevorstehende Schicht eingeteilt."))
     + box("Offene Schichten", shiftList(open, timezone, shift =>
       `<a href="/schichten/${shift.id}">${shift.filled >= shift.slots ? "Für die Nachbesetzung vormerken" : "Schicht ansehen"}</a>`)
       || empty("Zurzeit gibt es keine neuen Schichtangebote für dich."), "schichten")
     + box("Meine Rückmeldungen", shiftList(responses, timezone, shift =>
-      `<p class="badge">${statusLabel[responseState.get(shift.id)]}</p>
-      ${responseState.get(shift.id) === "interested" ? abort(shift, "Interesse zurückziehen") : ""}`)
+      `<p>${status(stateFor(shift))}</p>${stateFor(shift) === "interested" ? withdraw(shift) : ""}`)
       || empty("Deine Bewerbungen und Zusagen erscheinen hier."), "bewerbungen")
     + box("Aufgaben", (user.review_note ? `<p>${esc(user.review_note)}</p>` : "")
       + (tasks.length ? `<ul>${tasks.join("")}</ul>` : empty("Für deine offenen Einsatzbewerbungen fehlen keine Qualifikationen.")))
@@ -152,13 +170,13 @@ export function renderShift(db, user, id, timezone, failure) {
     <h1>${esc(shift.title)}</h1>${shiftFacts(shift, timezone)}
     ${alert(failure?.message)}
     ${allMissing.length ? `<p>Noch zu prüfen: ${esc(allMissing.join(", "))}</p>` : ""}
-    ${response && response.status !== "withdrawn" ? `<p class="badge">${statusLabel[response.status]}</p>`
+    ${response && response.status !== "withdrawn" ? `<p>${status(response.status)}</p>`
       : missing.length ? box("Vor der Bewerbung erforderlich", `<p>${esc(missing.join(", "))}</p><a href="/#profil">Qualifikationen ansehen</a>`)
         : box("Für die Schicht bewerben", form)}`);
 }
 
 function staffReview(db, person) {
-  return `<li><details><summary>${esc(person.name)} <span class="badge">${statusLabel[person.status]}</span></summary>
+  return `<li><details><summary>${esc(person.name)} ${status(person.status)}</summary>
     <p>${esc(person.email)}</p><p class="preserve">${esc(person.availability || "Keine typische Verfügbarkeit hinterlegt.")}</p>
     ${qualificationList(db, person.id, true)}
     ${person.status !== "active" ? post("/dispo/freigabe", hidden("person", person.id)
@@ -178,7 +196,7 @@ function planningShift(db, shift, staff, timezone) {
   const invitationNames = db.prepare(`SELECT p.name FROM invitations i JOIN people p ON p.id=i.person
     WHERE i.shift=? ORDER BY p.name`).all(shift.id);
   return `<div class="shift" id="shift-${shift.id}"><h3>${esc(shift.title)}</h3>
-    <p class="badge">${statusLabel[shift.visibility]}</p>${shiftFacts(shift, timezone)}
+    <p>${status(shift.visibility)}</p>${shiftFacts(shift, timezone)}
     ${requirements.length ? `<p>${requirements.map(r => esc(r.name) + (r.timing === "apply" ? " (vor Bewerbung)" : " (vor Einteilung)")).join(" · ")}</p>` : ""}
     ${isUpcoming && shift.visibility === "draft" ? post("/dispo/sichtbarkeit", hidden("shift", shift.id)
       + label("Veröffentlichen für", '<select name="visibility"><option value="pool">Aktiver Pool</option><option value="invite">Nur eingeladene Personen</option></select>')
@@ -196,7 +214,7 @@ function planningShift(db, shift, staff, timezone) {
     ${responses.length ? `<ul class="items">${responses.map(response => {
       const missing = missingQualifications(db, shift, response.person, "assign", timezone);
       const answers = JSON.parse(response.answers);
-      return `<li><strong>${esc(response.name)}</strong> <span class="badge">${statusLabel[response.status]}</span>
+      return `<li><strong>${esc(response.name)}</strong> ${status(response.status)}
       ${answers.length ? `<dl>${answers.map((answer, index) => `<dt>${esc(questions[index])}</dt><dd>${esc(answer)}</dd>`).join("")}</dl>` : ""}
       ${response.status === "interested" && missing.length ? `<p>Fehlende Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${response.status === "interested" && isUpcoming && !missing.length && shift.filled < shift.slots
@@ -225,19 +243,22 @@ function adminHome(db, user, timezone, failure) {
   const staff = db.prepare("SELECT id,name,email,status,availability,review_note FROM people WHERE role='staff' ORDER BY status='pending' DESC,name").all();
   const events = db.prepare("SELECT * FROM events ORDER BY id DESC").all();
   const shifts = db.prepare(shiftQuery + " ORDER BY s.starts").all();
-  const eventForm = post("/dispo/einsatz",
-    `<div class="form-grid">${label("Einsatzname", '<input name="title" required maxlength="120">')}
-    ${label("Ort", '<input name="location" required maxlength="180">')}</div>
-    ${label("Externe Referenz (optional)", '<input name="reference" maxlength="250">')}
-    ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000))}
+  const eventFailure = failure?.type === "event" ? failure : undefined;
+  const values = eventFailure?.form;
+  const eventForm = alert(eventFailure?.message) + post("/dispo/einsatz",
+    `<div class="form-grid">${label("Einsatzname", `<input name="title" required maxlength="120" value="${esc(values?.get("title"))}">`)}
+    ${label("Ort", `<input name="location" required maxlength="180" value="${esc(values?.get("location"))}">`)}</div>
+    ${label("Externe Referenz (optional)", `<input name="reference" maxlength="250" value="${esc(values?.get("reference"))}">`)}
+    ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000, values?.get("instructions")))}
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
-    ${failure ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.event ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${eventFailure ? '<p><a href="#neuer-einsatz">Zum Einsatzformular mit der Fehlermeldung</a></p>' : ""}
     <div class="overview"><div><span class="muted">Bewerbungen in Prüfung</span><strong>${staff.filter(p => p.status === "pending").length}</strong></div>
     <div><span class="muted">Aktive Poolmitglieder</span><strong>${staff.filter(p => p.status === "active").length}</strong></div></div>`
     + box("Personal", staff.length ? `<ul class="items">${staff.map(person => staffReview(db, person)).join("")}</ul>`
       : empty("Sobald sich jemand registriert, erscheint die Bewerbung hier."), "personal")
-    + box("Einsätze", `<details ${events.length ? "" : "open"}><summary>Einsatz anlegen</summary>${eventForm}</details>
+    + box("Einsätze", `<details id="neuer-einsatz" ${!events.length || eventFailure ? "open" : ""}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
       ${esc(event.location)}${event.reference ? " · " + esc(event.reference) : ""}</p>
       ${shiftForm(event, timezone, failure?.event === event.id ? failure : undefined)}
@@ -246,6 +267,9 @@ function adminHome(db, user, timezone, failure) {
 
 export function render(db, user, timezone, path, message, failure) {
   if (message && failure?.form) {
+    if (user?.role === "admin" && failure.path === "/dispo/einsatz") {
+      return adminHome(db, user, timezone, { type: "event", form: failure.form, message });
+    }
     if (user?.role === "admin" && failure.path === "/dispo/schicht") {
       const event = Number(failure.form.get("event"));
       if (Number.isSafeInteger(event) && db.prepare("SELECT 1 FROM events WHERE id=?").get(event)) {

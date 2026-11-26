@@ -9,4 +9,6 @@ Verwende die [Prüfregeln](../../../docs/entwicklung.md#prüfungen-und-dokumenta
 
 Verwende bei einem Anwendungsstand die in der Zielbasis festgelegte Laufzeit und die dort dokumentierten Befehle. Starte Integrationsprüfungen mit einem getrennten temporären Datenbestand. Browserprüfungen verwenden eine eigene Instanz auf einem freien lokalen Port und einen synthetischen Ausgangsbestand. Vergewissere dich vor dem Start, dass weder Produktionsdaten noch Zugangsdaten für Fremdintegrationen im Testprozess geladen werden.
 
+Prüfe bei Quellcodeänderungen die [Codegröße und das CSS-Abstandsraster](../../../docs/entwicklung.md#codegröße-und-aufräumen) mit `npm run lint`. Ordne Hinweise zur Funktionslänge den neuen und geänderten Funktionen zu.
+
 Beende nach der Prüfung nur die eigens gestarteten Testdienste. Notiere Befehle, Stand, Resultate und Gründe für ausgelassene Prüfungen im PR.
