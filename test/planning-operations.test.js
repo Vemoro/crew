@@ -48,7 +48,10 @@ test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz un
   const correction = { event: 1, revision: 1, location: "Neue Halle", instructions: "Nur für Eingeteilte: Tor 4" };
   await visit("/dispo/einsatz-korrigieren", { cookie: mira, data: correction, expected: 404 });
   await visit("/dispo/einsatz-korrigieren", { cookie: admin, data: correction, expected: 303 });
-  await visit("/dispo/einsatz-korrigieren", { cookie: admin, data: correction, expected: 422 });
+  const staleCorrection = await visit("/dispo/einsatz-korrigieren", { cookie: admin, data: correction, expected: 422 });
+  assert.match(staleCorrection.body, /Zur Korrektur mit der Fehlermeldung/);
+  assert.match(staleCorrection.body, /<li>Aufbau ·[^<]+<\/li><li>Abbau ·[^<]+<\/li>/);
+  assert.doesNotMatch(staleCorrection.body, /<li>(Vorbereitung|Einlass) ·/);
   const byId = db.prepare(shiftQuery + " WHERE s.id=?");
   assert.deepEqual([1, 2, 3, 4].map(id => byId.get(id).location), ["Neue Halle", "Neue Halle", "Alte Halle", "Alte Halle"]);
   assert.match((await visit("/", { cookie: mira })).body, /Tor 4/);
@@ -68,7 +71,12 @@ test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz un
   await visit("/dispo/einteilen", { cookie: admin, data: { shift: 1, person: 3, revision: 1 }, expected: 303 });
   await visit("/dispo/schicht-zuruecknehmen", { cookie: admin, data: { shift: 1, revision: 2 }, expected: 422 });
   await visit("/dispo/schicht-zuruecknehmen", { cookie: admin, data: { shift: 1, revision: 3 }, expected: 303 });
+  await visit("/dispo/einsatz-korrigieren", { cookie: admin, data: { ...correction, revision: 2 }, expected: 422 });
   await visit("/dispo/einladen", { cookie: admin, data: { shift: 1, person: 4 }, expected: 422 });
+  await visit("/dispo/einladen", { cookie: admin, data: { shift: 2, person: 4 }, expected: 303 });
+  await visit("/dispo/einladen", { cookie: admin, data: { shift: 2, person: 4 }, expected: 303 });
+  assert.equal(byId.get(2).placement_revision, 2);
+  await visit("/dispo/schicht-zuruecknehmen", { cookie: admin, data: { shift: 2, revision: 1 }, expected: 422 });
   await visit("/interesse", { cookie: mira, data: { shift: 1 }, expected: 422 });
   const cancelled = (await visit("/", { cookie: leni })).body;
   assert.match(cancelled, /Schicht zurückgenommen/);

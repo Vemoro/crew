@@ -40,7 +40,7 @@ unset CREW_ADMIN_PASSWORD
 
 Beim nativen Start verwende mit demselben Datenbankpfad `npm run admin -- reset-password personal@example.test`. Ein Passwortwechsel beendet die bestehenden Sitzungen. Wirksame Kontosperren bleiben bestehen.
 
-Dieser Crew-Stand migriert die Datenbank beim Start der Anwendung oder CLI auf Schema 3. Sichere den Ausgangsstand vor dem Update. Für eine Rückkehr zur älteren Crew-Version verwende eine separate Kopie der Vorupdate-Sicherung. [Sicherung und Wiederanlauf](sicherung.md)
+Dieser Crew-Stand migriert die Datenbank beim Start der Anwendung oder CLI auf Schema 4. Sichere den Ausgangsstand vor dem Update. Für eine Rückkehr zur älteren Crew-Version verwende eine separate Kopie der Vorupdate-Sicherung. [Sicherung und Wiederanlauf](sicherung.md)
 
 ## Adresse und Zeitzone
 

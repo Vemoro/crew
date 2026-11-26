@@ -143,6 +143,9 @@ try {
   await staff.reload();
   assert.match(await staff.locator(".overview").innerText(), /125,00\s€/);
   await admin.getByText("Ort und Hinweise korrigieren", { exact: true }).click();
+  await admin.getByText("Die Änderung betrifft diese Schichten", { exact: true }).waitFor();
+  await admin.getByText(/^Aufbau ·/).waitFor();
+  await show(admin, "einsatzkorrektur-hell");
   await admin.getByLabel("Korrigierter Ort").fill("Andere Musterhalle");
   await admin.getByRole("button", { name: "Angaben aktualisieren" }).click();
   await secondShift.getByRole("button", { name: "Platz freigeben", exact: true }).click();
@@ -155,6 +158,12 @@ try {
   await show(admin, "platzfreigabe-hell", false);
   await admin.setViewportSize({ width: 390, height: 844 });
   await show(admin, "platzfreigabe-handy", false);
+  await admin.emulateMedia({ colorScheme: "dark" });
+  await show(admin, "platzfreigabe-handy-dunkel", false);
+  await admin.keyboard.press("Escape");
+  assert.equal(await secondShift.getByRole("button", { name: "Platz freigeben", exact: true })
+    .evaluate(field => field === document.activeElement), true);
+  await admin.keyboard.press("Enter");
   await release.getByRole("button", { name: "Platzfreigabe bestätigen" }).click();
   await staff.reload();
   assert.match(await staff.locator(".overview").innerText(), /80,00\s€/);

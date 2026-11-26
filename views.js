@@ -274,7 +274,8 @@ function adminHome(db, user, timezone, failure) {
     ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000, values?.get("instructions")))}
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
-    ${failure?.event ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.event ? `<p><a href="#event-${failure.event}">${failure.type === "correction"
+      ? "Zur Korrektur" : "Zum Schichtformular"} mit der Fehlermeldung</a></p>` : ""}
     ${failure?.shift ? `<p><a href="#shift-${failure.shift}">Zur Schicht mit der Fehlermeldung</a></p>` : ""}
     ${failure?.person ? `<p><a href="#person-${failure.person}">Zum Personalprofil mit der Fehlermeldung</a></p>` : ""}
     ${eventFailure ? '<p><a href="#neuer-einsatz">Zum Einsatzformular mit der Fehlermeldung</a></p>' : ""}
@@ -286,7 +287,8 @@ function adminHome(db, user, timezone, failure) {
     + box("Einsätze", `<details id="neuer-einsatz" ${!events.length || eventFailure ? "open" : ""}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
       ${esc(event.location)}${event.reference ? " · " + esc(event.reference) : ""}</p>
-      ${correctionForm(event, shifts.filter(shift => shift.event === event.id && !shift.cancelled_at && shift.starts > new Date().toISOString()).length,
+      ${correctionForm(event, shifts.filter(shift => shift.event === event.id && !shift.cancelled_at && shift.starts > new Date().toISOString())
+        .map(shift => `${shift.title} · ${date(shift.starts, timezone)}`),
         failure?.type === "correction" && failure.event === event.id ? failure : undefined)}
       ${shiftForm(event, timezone, failure?.event === event.id && failure.type !== "correction" ? failure : undefined)}
       ${shifts.filter(shift => shift.event === event.id).map(shift => planningShift(db, shift, staff, timezone,

@@ -17,10 +17,24 @@ export function cancelShift(db, shift, revision) {
     const result = db.prepare(`UPDATE shifts SET cancelled_at=?,placement_revision=placement_revision+1
       WHERE id=? AND placement_revision=? AND starts>? AND cancelled_at IS NULL`);
     const now = new Date().toISOString();
-    if (result.run(now, shift, revision, now).changes === 1) return;
+    if (result.run(now, shift, revision, now).changes === 1) {
+      db.prepare("UPDATE events SET revision=revision+1 WHERE id=(SELECT event FROM shifts WHERE id=?)").run(shift);
+      return;
+    }
     const current = db.prepare("SELECT cancelled_at,placement_revision FROM shifts WHERE id=?").get(shift);
     requireInput(current?.cancelled_at && current.placement_revision === revision + 1,
       "Die Schicht hat sich geändert oder bereits begonnen. Bitte prüfe den aktuellen Stand.");
+  });
+}
+
+export function inviteToShift(db, shift, person) {
+  transaction(db, () => {
+    const open = db.prepare(`SELECT 1 FROM shifts WHERE id=? AND visibility='invite' AND cancelled_at IS NULL AND starts>?
+      AND EXISTS (SELECT 1 FROM people WHERE id=? AND role='staff' AND status='active' AND access_suspended=0)`)
+      .get(shift, new Date().toISOString(), person);
+    requireInput(open, "Eine Einladung benötigt eine offene Einladungsschicht und ein aktives Poolmitglied.");
+    const result = db.prepare("INSERT INTO invitations VALUES (?,?) ON CONFLICT(shift,person) DO NOTHING").run(shift, person);
+    if (result.changes === 1) db.prepare("UPDATE shifts SET placement_revision=placement_revision+1 WHERE id=?").run(shift);
   });
 }
 
