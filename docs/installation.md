@@ -4,7 +4,7 @@ Crew l채uft als einzelner Node.js-Dienst und speichert seine Daten in SQLite. F�
 
 ## Docker Compose
 
-Setze `CREW_ADMIN_PASSWORD` in der Umgebung deiner Shell auf ein eigenes Passwort mit 12 bis 128 Zeichen. Entferne die Variable nach der Kontoanlage wieder aus der Shell.
+Setze `CREW_ADMIN_PASSWORD` in der Umgebung deiner Shell auf ein eigenes Passwort mit 12 bis 128 Zeichen ohne Zeilenumbr체che. Entferne die Variable nach der Kontoanlage wieder aus der Shell.
 
 ```sh
 docker compose build
@@ -39,6 +39,8 @@ unset CREW_ADMIN_PASSWORD
 ```
 
 Beim nativen Start verwende mit demselben Datenbankpfad `npm run admin -- reset-password personal@example.test`. Ein Passwortwechsel beendet die bestehenden Sitzungen. Wirksame Kontosperren bleiben bestehen.
+
+Dieser Crew-Stand migriert die Datenbank beim Start der Anwendung oder CLI auf Schema 3. Sichere den Ausgangsstand vor dem Update. F체r eine R체ckkehr zur 채lteren Crew-Version verwende eine separate Kopie der Vorupdate-Sicherung. [Sicherung und Wiederanlauf](sicherung.md)
 
 ## Adresse und Zeitzone
 

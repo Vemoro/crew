@@ -190,9 +190,10 @@ function poolAccessControls(person) {
     </dialog>`;
 }
 
-function staffReview(db, person) {
-  return `<li id="person-${person.id}"><details><summary>${esc(person.name)}
+function staffReview(db, person, failure) {
+  return `<li id="person-${person.id}"><details ${failure ? "open" : ""}><summary>${esc(person.name)}
     ${person.access_suspended ? '<span class="status danger">Zugang gesperrt</span>' : status(person.status)}</summary>
+    ${alert(failure?.message)}
     <p>${esc(person.email)}</p><p class="preserve">${esc(person.availability || "Keine typische Verfügbarkeit hinterlegt.")}</p>
     ${qualificationList(db, person.id, true)}
     ${person.status !== "active" ? post("/dispo/freigabe", hidden("person", person.id)
@@ -271,10 +272,12 @@ function adminHome(db, user, timezone, failure) {
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
     ${failure?.event ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.person ? `<p><a href="#person-${failure.person}">Zum Personalprofil mit der Fehlermeldung</a></p>` : ""}
     ${eventFailure ? '<p><a href="#neuer-einsatz">Zum Einsatzformular mit der Fehlermeldung</a></p>' : ""}
     <div class="overview"><div><span class="muted">Bewerbungen in Prüfung</span><strong>${staff.filter(p => p.status === "pending").length}</strong></div>
     <div><span class="muted">Aktive Poolmitglieder</span><strong>${staff.filter(p => p.status === "active" && !p.access_suspended).length}</strong></div></div>`
-    + box("Personal", staff.length ? `<ul class="items">${staff.map(person => staffReview(db, person)).join("")}</ul>`
+    + box("Personal", staff.length ? `<ul class="items">${staff.map(person =>
+      staffReview(db, person, failure?.person === person.id ? failure : undefined)).join("")}</ul>`
       : empty("Sobald sich jemand registriert, erscheint die Bewerbung hier."), "personal")
     + box("Einsätze", `<details id="neuer-einsatz" ${!events.length || eventFailure ? "open" : ""}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
@@ -285,6 +288,12 @@ function adminHome(db, user, timezone, failure) {
 
 export function render(db, user, timezone, path, message, failure) {
   if (message && failure?.form) {
+    if (user?.role === "admin" && failure.path === "/dispo/kontozugang") {
+      const person = Number(failure.form.get("person"));
+      if (Number.isSafeInteger(person) && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff'").get(person)) {
+        return adminHome(db, user, timezone, { person, message });
+      }
+    }
     if (user?.role === "admin" && failure.path === "/dispo/einsatz") {
       return adminHome(db, user, timezone, { type: "event", form: failure.form, message });
     }

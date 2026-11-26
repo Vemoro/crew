@@ -92,6 +92,7 @@ export function normalizeEmail(value) {
 
 export function verifyPasswordLength(password) {
   requireInput(password.length >= 12 && password.length <= 128, "Das Passwort braucht 12 bis 128 Zeichen.");
+  requireInput(!/[\r\n]/.test(password), "Das Passwort darf keine Zeilenumbrüche enthalten.");
 }
 
 export function qualificationName(value) {

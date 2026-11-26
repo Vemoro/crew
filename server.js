@@ -108,7 +108,7 @@ function saveSession(db, res, { id, secret }, token, secure) {
   const nextToken = randomBytes(32).toString("hex");
   transaction(db, () => {
     const current = db.prepare("SELECT secret,access_suspended FROM people WHERE id=?").get(id);
-    requireInput(current?.secret === secret && !current.access_suspended, "E-Mail-Adresse oder Passwort stimmt nicht.");
+    requireInput(current && current.secret === secret && !current.access_suspended, "E-Mail-Adresse oder Passwort stimmt nicht.");
     db.prepare("DELETE FROM sessions WHERE expires<=? OR token=?").run(Date.now(), sessionHash(token ?? ""));
     db.prepare("INSERT INTO sessions VALUES (?,?,?)").run(sessionHash(nextToken), id, Date.now() + lifetime * 1000);
   });
@@ -319,6 +319,7 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
         form = await readForm(req);
         const destination = await submit({ db, req, res, token, path, form, secure, timezone, limit });
         if (destination) return redirect(res, destination);
+        user = findUser(db, token);
         status = 404;
       } else if (req.method === "GET") {
         const evidence = /^\/nachweis\/(\d+)$/.exec(path);
@@ -343,7 +344,7 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
       const input = error instanceof InputError;
       if (!input) console.error("Crew-Anfrage fehlgeschlagen.", error.code ?? error.name);
       res.writeHead(input ? 422 : 500, { "Content-Type": "text/html; charset=utf-8" })
-        .end(render(db, user, timezone, "/fehler",
+        .end(render(db, input ? findUser(db, token) : undefined, timezone, "/fehler",
           input ? error.message : "Die Anfrage konnte nicht abgeschlossen werden.", input ? { path, form } : undefined));
     }
   });

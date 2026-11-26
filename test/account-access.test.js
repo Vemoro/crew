@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
+import { request as startRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,18 +66,53 @@ test("Pool-Sperre und CLI-Passwortwiederherstellung widerrufen alte Sitzungen", 
   assert.match(planning.html, /Zugang gesperrt\. Besetzung prüfen\./);
   assert.match(planning.html, /1 von 1 Plätzen besetzt/);
   await request("/dispo/kontozugang", { data: { person: 2, revision: 2, action: "resume" }, cookie: admin, expected: 303 });
-  await request("/dispo/kontozugang", { data: suspend, cookie: admin, expected: 422 });
+  const staleForm = await request("/dispo/kontozugang", { data: suspend, cookie: admin, expected: 422 });
+  assert.match(staleForm.html, /id="person-2"><details open>[\s\S]+role="alert">Der Kontozugang hat sich geändert/);
   for (const cookie of [first, second]) await request("/nachweis/1", { cookie, expected: 404 });
   const renewed = await login("mira@example.test", password);
   await request("/nachweis/1", { cookie: renewed });
 
   const entrypoint = fileURLToPath(new URL("../admin.js", import.meta.url));
+  const invalid = spawnSync(process.execPath, [entrypoint, "reset-password", "mira@example.test"], {
+    env: { ...process.env, CREW_DB: database, CREW_ADMIN_PASSWORD: replacement + "\n" }, encoding: "utf8",
+  });
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /keine Zeilenumbrüche/);
+  await request("/nachweis/1", { cookie: renewed });
+
   for (const email of ["mira@example.test", "dispo@example.test"]) {
+    const formBody = "title=&location=Interner+Testort";
+    let pending;
+    let responseAfterReset;
+    if (email === "dispo@example.test") {
+      const seen = once(server, "request");
+      responseAfterReset = new Promise((resolve, reject) => {
+        pending = startRequest(base + "/dispo/einsatz", { method: "POST",
+          headers: { Origin: origin, Cookie: admin, "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Length": Buffer.byteLength(formBody) },
+        }, response => {
+          response.setEncoding("utf8");
+          let html = "";
+          response.on("data", chunk => { html += chunk; });
+          response.once("end", () => resolve({ status: response.statusCode, html }));
+          response.once("error", reject);
+        });
+        pending.once("error", reject);
+        pending.flushHeaders();
+      });
+      await seen;
+    }
     const operation = spawnSync(process.execPath, [entrypoint, "reset-password", email], {
       env: { ...process.env, CREW_DB: database, CREW_ADMIN_PASSWORD: replacement }, encoding: "utf8",
     });
     assert.equal(operation.status, 0, operation.stderr);
     assert.equal((operation.stdout + operation.stderr).includes(replacement), false);
+    if (pending) {
+      pending.end(formBody);
+      const blocked = await responseAfterReset;
+      assert.equal(blocked.status, 422);
+      assert.doesNotMatch(blocked.html, /Personal und Einsätze|Mira|Interner Testort/);
+    }
     await login(email, password, 422);
     await login(email, replacement);
   }
