@@ -14,6 +14,7 @@ db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'ad
 const port = Number(process.env.CREW_BROWSER_PORT || 42671);
 const origin = `http://127.0.0.1:${port}`;
 const app = createApp({ db, origin });
+let runningApp = app;
 app.listen(port, "127.0.0.1");
 await once(app, "listening");
 const screenshotDirectory = process.env.CREW_SCREENSHOTS || "build/screenshots";
@@ -179,34 +180,27 @@ try {
   await staff.getByRole("button", { name: "Anmelden", exact: true }).click();
   await staff.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
 
-  const pausedPort = port + 1;
-  const pausedOrigin = `http://127.0.0.1:${pausedPort}`;
-  const pausedApp = createApp({ db, origin: pausedOrigin, registrationOpen: false });
-  pausedApp.listen(pausedPort, "127.0.0.1");
-  await once(pausedApp, "listening");
-  try {
-    const pausedPortal = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
-    await pausedPortal.goto(pausedOrigin + "/registrieren");
-    await pausedPortal.getByText("Die Selbstregistrierung ist derzeit pausiert.", { exact: true }).waitFor();
-    assert.equal(await pausedPortal.getByRole("link", { name: "Registrieren", exact: true }).count(), 0);
-    await show(pausedPortal, "registrierung-pausiert-hell", false);
-    await pausedPortal.emulateMedia({ colorScheme: "dark" });
-    await show(pausedPortal, "registrierung-pausiert-dunkel", false);
-    await pausedPortal.setViewportSize({ width: 390, height: 844 });
-    await show(pausedPortal, "registrierung-pausiert-handy", false);
-    await pausedPortal.getByLabel("E-Mail-Adresse").fill("mira@example.test");
-    await pausedPortal.getByLabel("Passwort").fill(password);
-    await pausedPortal.getByRole("button", { name: "Anmelden", exact: true }).click();
-    await pausedPortal.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
-    await pausedPortal.close();
-  } finally {
-    pausedApp.close();
-    await once(pausedApp, "close");
-  }
+  await new Promise(resolve => app.close(resolve));
+  runningApp = createApp({ db, origin, registrationOpen: false });
+  runningApp.listen(port, "127.0.0.1");
+  await once(runningApp, "listening");
+  const pausedPortal = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
+  await pausedPortal.goto(origin + "/registrieren");
+  await pausedPortal.getByText("Die Selbstregistrierung ist derzeit pausiert.", { exact: true }).waitFor();
+  assert.equal(await pausedPortal.getByRole("link", { name: "Registrieren", exact: true }).count(), 0);
+  await show(pausedPortal, "registrierung-pausiert-hell", false);
+  await pausedPortal.emulateMedia({ colorScheme: "dark" });
+  await show(pausedPortal, "registrierung-pausiert-dunkel", false);
+  await pausedPortal.setViewportSize({ width: 390, height: 844 });
+  await show(pausedPortal, "registrierung-pausiert-handy", false);
+  await pausedPortal.getByLabel("E-Mail-Adresse").fill("mira@example.test");
+  await pausedPortal.getByLabel("Passwort").fill(password);
+  await pausedPortal.getByRole("button", { name: "Anmelden", exact: true }).click();
+  await pausedPortal.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
+  await pausedPortal.close();
   console.log("Browser: Kernablauf, Absagedialog, Kontosperre und pausierte Registrierung geprüft.");
 } finally {
   await browser.close();
-  app.close();
-  await once(app, "close");
+  await new Promise(resolve => runningApp.close(resolve));
   db.close();
 }
