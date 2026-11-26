@@ -12,4 +12,4 @@ Halte Commit, Laufzeitversion, isolierte Prüfstände und Datum fest. Verknüpfe
 | Öffentliche Auslieferung | Git-Historie, Issues, PRs, Beispiele, Auslieferungsdateien und Prüfnachweise auf veröffentlichbare Inhalte kontrollieren. Lizenz und zugehörigen Quellstand prüfen. |
 | Freigabe | Abnahme am Kandidatenstand dokumentieren. Merge, Release 0.1.0.0 und öffentliche Sichtbarkeit erfordern die Freigabe der Maintainer. |
 
-[Entwicklung](entwicklung.md#änderungen-prüfen) · [Versionshinweise](../CHANGELOG.md)
+[Entwicklung](entwicklung.md#änderungen-prüfen) · [Quellpaket](quellpaket.md) · [Versionshinweise](../CHANGELOG.md)
