@@ -1,0 +1,43 @@
+name: Prüfungen
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  crew:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Syntax prüfen
+        run: |
+          for source in *.js test/*.js scripts/*.mjs; do
+            node --check "$source"
+          done
+      - name: Crew prüfen
+        env:
+          TZ: Europe/Berlin
+        run: npm test
+      - name: Browser bereitstellen
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Bedienung prüfen und Ansichten aufnehmen
+        env:
+          TZ: Europe/Berlin
+        run: npm run test:browser
+      - name: Ansichten bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: crew-ansichten
+          path: build/screenshots/*.png
+      - name: Container bauen
+        run: docker build -t crew-ci .

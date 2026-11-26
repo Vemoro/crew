@@ -1,0 +1,96 @@
+import { chromium } from "playwright";
+import { once } from "node:events";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import assert from "node:assert/strict";
+import { createApp } from "../server.js";
+import { openDatabase, passwordHash } from "../model.js";
+
+const browser = await chromium.launch({ channel: process.env.CREW_BROWSER_CHANNEL, headless: true });
+const db = openDatabase(":memory:");
+const password = "synthetic-browser-password";
+db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'admin','active')")
+  .run("dispo@example.test", "Crew Dispo", passwordHash(password));
+const port = Number(process.env.CREW_BROWSER_PORT || 42671);
+const origin = `http://127.0.0.1:${port}`;
+const app = createApp({ db, origin });
+app.listen(port, "127.0.0.1");
+await once(app, "listening");
+const screenshotDirectory = process.env.CREW_SCREENSHOTS || "build/screenshots";
+mkdirSync(screenshotDirectory, { recursive: true });
+const show = (page, name) => page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage: true });
+
+try {
+  const desktop = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light" });
+  const staff = await desktop.newPage();
+  await staff.goto(origin + "/registrieren");
+  await staff.keyboard.press("Tab");
+  assert.equal(await staff.evaluate(() => document.activeElement.textContent), "Zum Inhalt");
+  await staff.keyboard.press("Enter");
+  await staff.getByLabel("Name", { exact: true }).fill("Mira Nord");
+  await staff.getByLabel("E-Mail-Adresse").fill("mira@example.test");
+  await staff.getByLabel("Passwort").fill(password);
+  await staff.getByLabel("Verfügbarkeit").fill("Samstags ab 13 Uhr");
+  await staff.getByRole("button", { name: "Bewerbung starten" }).click();
+  await staff.getByText("In Prüfung", { exact: true }).waitFor();
+
+  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", isMobile: true, deviceScaleFactor: 1, hasTouch: true });
+  await mobile.addCookies(await desktop.cookies());
+  const staffMobile = await mobile.newPage();
+
+  const planning = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light" });
+  const admin = await planning.newPage();
+  await admin.goto(origin + "/anmelden");
+  await admin.getByLabel("E-Mail-Adresse").fill("dispo@example.test");
+  await admin.getByLabel("Passwort").fill(password);
+  await admin.getByRole("button", { name: "Anmelden", exact: true }).click();
+  await admin.getByText("Mira Nord", { exact: false }).first().click();
+  await admin.getByLabel("Entscheidung").selectOption("active");
+  await admin.getByRole("button", { name: "Entscheidung speichern" }).click();
+  await admin.getByLabel("Einsatzname").fill("Stadtfest West");
+  await admin.getByLabel("Ort", { exact: true }).fill("Musterhalle");
+  await admin.getByLabel("Treffpunkt und Hinweise").fill("Treffpunkt Tor 4");
+  await admin.getByRole("button", { name: "Einsatz anlegen", exact: true }).click();
+  await admin.getByText("Schicht hinzufügen", { exact: true }).click();
+  await admin.getByLabel("Schichtname").fill("Aufbau");
+  const future = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+  await admin.getByLabel("Beginn").fill(future + "T14:00");
+  await admin.getByLabel("Ende").fill(future + "T18:00");
+  await admin.getByLabel("Vergütung pro Person in Euro").fill("80");
+  await admin.getByLabel("Pflichtfragen").fill("An welchem Eingang wartest du?");
+  await admin.getByRole("button", { name: "Schichtentwurf speichern" }).click();
+  await admin.getByRole("button", { name: "Schicht veröffentlichen" }).click();
+  await staffMobile.goto(origin);
+  await staffMobile.getByText("Menü", { exact: true }).click();
+  await staffMobile.getByRole("link", { name: "Schichten", exact: true }).click();
+  await staffMobile.getByRole("link", { name: "Schicht ansehen" }).click();
+  await staffMobile.getByLabel("An welchem Eingang wartest du?").fill("Tor 4");
+  await staffMobile.getByRole("button", { name: "Interesse melden" }).click();
+  await staffMobile.getByText("Interesse gemeldet", { exact: true }).waitFor();
+  await admin.reload();
+  await admin.getByText("Tor 4", { exact: true }).waitFor();
+  await admin.getByRole("button", { name: "Besetzung bestätigen" }).click();
+  await staff.goto(origin);
+  await staff.getByText("Treffpunkt Tor 4", { exact: true }).waitFor();
+  assert.match(await staff.locator(".overview").innerText(), /80,00\s€/);
+  await show(staff, "personal-hell");
+  await staff.emulateMedia({ colorScheme: "dark" });
+  await show(staff, "personal-dunkel");
+  await staffMobile.goto(origin);
+  assert.equal(await staffMobile.evaluate(() => document.documentElement.scrollWidth === innerWidth), true);
+  await show(staffMobile, "personal-handy-dunkel");
+  await staffMobile.emulateMedia({ colorScheme: "light" });
+  await show(staffMobile, "personal-handy-hell");
+  await show(admin, "dispo-hell");
+  await admin.emulateMedia({ colorScheme: "dark" });
+  await show(admin, "dispo-dunkel");
+  await staffMobile.getByRole("button", { name: "Einsatz absagen" }).click();
+  await staffMobile.getByText("Zurückgezogen", { exact: true }).waitFor();
+  assert.match(await staffMobile.locator(".overview").innerText(), /0,00\s€/);
+  console.log("Browser: Bewerbung, Tastatur, Dispo, mobiles Menü, Pflichtfrage, Bestätigung, Vergütung, Absage und sechs Ansichten geprüft.");
+} finally {
+  await browser.close();
+  app.close();
+  await once(app, "close");
+  db.close();
+}
