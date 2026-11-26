@@ -13,7 +13,7 @@ export async function checkMobilePlanning(browser, planning, origin, show, engin
         await page.goto(origin + "/dispo");
         const heading = page.getByRole("heading", { name: "Personal und Einsätze" });
         await heading.waitFor();
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth), true);
+        await checkWidth(page, width);
         const skipLink = page.getByRole("link", { name: "Zum Inhalt" });
         if (engine === "webkit") await skipLink.focus();
         else await page.keyboard.press("Tab");
@@ -28,9 +28,11 @@ export async function checkMobilePlanning(browser, planning, origin, show, engin
         await page.keyboard.press("Tab");
         await checkFocus(dialog.getByRole("button", { name: "Einladung im Portal bereitstellen" }));
         await checkTouchTargets(dialog.locator("button, select"));
+        await checkWidth(page, width);
         await show(page, `einladung-${width}-${theme}`, false);
         await page.keyboard.press("Escape");
         await dialog.waitFor({ state: "hidden" });
+        await button.and(page.locator(":focus")).waitFor();
         await checkFocus(button);
 
         const status = page.getByText("Nur auf Einladung", { exact: true });
@@ -43,6 +45,7 @@ export async function checkMobilePlanning(browser, planning, origin, show, engin
         await form.getByRole("button", { name: "Einsatz anlegen" }).tap();
         const error = form.getByRole("alert");
         await checkTextContrast(error);
+        await checkWidth(page, width);
         await error.scrollIntoViewIfNeeded();
         await show(page, `dispo-fehler-${width}-${theme}`, false);
       }
@@ -50,6 +53,12 @@ export async function checkMobilePlanning(browser, planning, origin, show, engin
   } finally {
     await context.close();
   }
+}
+
+async function checkWidth(page, width) {
+  const widths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
+  assert.equal(widths.viewport, width, "Die Dispo nutzt den erwarteten mobilen Layout-Viewport.");
+  assert.ok(widths.content <= width, `Dispo-Inhalt ist ${widths.content}px breit bei ${width}px Platz.`);
 }
 
 async function checkTouchTargets(controls) {
@@ -62,7 +71,9 @@ async function checkTouchTargets(controls) {
 async function checkFocus(control) {
   assert.equal(await control.evaluate(element => {
     const style = getComputedStyle(element);
-    return document.activeElement === element && style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2;
+    const outlineAlpha = style.outlineColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/)?.[1];
+    return document.activeElement === element && style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2
+      && style.outlineColor !== "transparent" && (outlineAlpha === undefined || Number(outlineAlpha) > 0);
   }), true, "Tastaturfokus fehlt oder hat keinen sichtbaren Umriss.");
 }
 

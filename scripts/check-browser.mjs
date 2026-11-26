@@ -114,7 +114,7 @@ try {
   await inviteDialog.waitFor();
   assert.equal(await inviteDialog.getByRole("combobox").evaluate(field => field === document.activeElement), true);
   await admin.keyboard.press("Escape");
-  assert.equal(await inviteButton.evaluate(button => button === document.activeElement), true);
+  await inviteButton.and(admin.locator(":focus")).waitFor();
   await inviteButton.click();
   await inviteDialog.getByRole("button", { name: "Einladung im Portal bereitstellen" }).click();
   await admin.getByText("Eingeladen: Mira Nord", { exact: true }).waitFor();
@@ -124,7 +124,7 @@ try {
   await staff.emulateMedia({ colorScheme: "dark" });
   await show(staff, "personal-dunkel");
   await staffMobile.goto(origin);
-  assert.equal(await staffMobile.evaluate(() => document.documentElement.scrollWidth === innerWidth), true);
+  assert.ok(await staffMobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
   if (engine === "chromium") {
     for (const expected of ["Zum Inhalt", "Crew.", "Abmelden", "Menü"]) {
       await staffMobile.keyboard.press("Tab");
@@ -166,11 +166,14 @@ try {
   await show(admin, "einsatzkorrektur-dunkel");
   await admin.getByLabel("Korrigierter Ort").fill("Andere Musterhalle");
   await admin.getByRole("button", { name: "Angaben aktualisieren" }).click();
-  await secondShift.getByRole("button", { name: "Platz freigeben", exact: true }).click();
+  await secondShift.getByText(/Andere Musterhalle/).waitFor();
+  const releaseButton = secondShift.getByRole("button", { name: "Platz freigeben", exact: true });
+  await releaseButton.click();
   const release = admin.getByRole("dialog", { name: "Platz freigeben?" });
   assert.equal(await release.getByRole("button", { name: "Abbrechen" }).evaluate(field => field === document.activeElement), true);
   await admin.keyboard.press("Escape");
-  await secondShift.getByRole("button", { name: "Platz freigeben", exact: true }).click();
+  await releaseButton.and(admin.locator(":focus")).waitFor();
+  await releaseButton.click();
   await show(admin, "platzfreigabe-dunkel", false);
   await admin.emulateMedia({ colorScheme: "light" });
   await show(admin, "platzfreigabe-hell", false);
@@ -179,8 +182,7 @@ try {
   await admin.emulateMedia({ colorScheme: "dark" });
   await show(admin, "platzfreigabe-handy-dunkel", false);
   await admin.keyboard.press("Escape");
-  assert.equal(await secondShift.getByRole("button", { name: "Platz freigeben", exact: true })
-    .evaluate(field => field === document.activeElement), true);
+  await releaseButton.and(admin.locator(":focus")).waitFor();
   await admin.keyboard.press("Enter");
   await release.getByRole("button", { name: "Platzfreigabe bestätigen" }).click();
   await secondShift.getByText("Durch die Dispo freigegeben", { exact: true }).waitFor();
@@ -201,7 +203,7 @@ try {
   const keepShift = cancelDialog.getByRole("button", { name: "Abbrechen" });
   assert.equal(await keepShift.evaluate(field => document.activeElement === field), true);
   await staffMobile.keyboard.press("Escape");
-  assert.equal(await cancelButton.evaluate(field => document.activeElement === field), true);
+  await cancelButton.and(staffMobile.locator(":focus")).waitFor();
   assert.match(await staffMobile.locator(".overview").innerText(), /80,00\s€/);
   await cancelButton.click();
   await staffMobile.keyboard.press("Tab");
@@ -219,7 +221,7 @@ try {
   assert.equal(await suspendDialog.getByRole("button", { name: "Abbrechen" })
     .evaluate(field => document.activeElement === field), true);
   await admin.keyboard.press("Escape");
-  assert.equal(await suspend.evaluate(field => document.activeElement === field), true);
+  await suspend.and(admin.locator(":focus")).waitFor();
   await suspend.click();
   await show(admin, "kontosperre-dunkel", false);
   await admin.emulateMedia({ colorScheme: "light" });
@@ -257,7 +259,7 @@ try {
   await revokeDialog.waitFor();
   await show(admin, "nachweispruefung-ruecknahme-handy", false);
   await admin.keyboard.press("Escape");
-  assert.equal(await revoke.evaluate(element => element === document.activeElement), true);
+  await revoke.and(admin.locator(":focus")).waitFor();
   await admin.keyboard.press("Enter");
   await revokeDialog.getByRole("button", { name: "Rücknahme bestätigen" }).press("Enter");
   await radioProof.getByText("Prüfung offen", { exact: true }).waitFor({ state: "attached" });
