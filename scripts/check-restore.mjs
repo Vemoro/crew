@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
 const name = "crew-restore-" + randomBytes(5).toString("hex");
 const source = name + "-source";
@@ -12,9 +13,11 @@ const origin = "http://localhost:8080";
 const password = "synthetic-restore-password";
 const session = "7".repeat(64);
 const evidence = "%PDF-1.4\n% Crew synthetischer Nachweis\n%%EOF\n";
-const composeArgs = (project, args) => ["compose", "-f", "compose.yaml", "-p", project, ...args];
+const repository = fileURLToPath(new URL("../", import.meta.url));
+const composeArgs = (project, args) => ["compose", "-f", fileURLToPath(new URL("../compose.yaml", import.meta.url)), "-p", project, ...args];
 const composeOptions = {
   env: { ...process.env, CREW_PORT: "0", CREW_ORIGIN: origin, CREW_REGISTRATION: "open", CREW_TRUSTED_PROXY: "" },
+  cwd: repository,
   encoding: "utf8",
   windowsHide: true,
 };
@@ -106,11 +109,22 @@ try {
 
   compose(source, ["stop", "crew"]);
   const beforeFailure = sourceHash();
-  compose(broken, ["run", "--rm", "-T", "crew", "truncate", "-s", "512", "/app/data/crew.sqlite"]);
+  compose(broken, ["run", "--rm", "-T", "crew", "node", "--input-type=module", "-"], `
+    import { closeSync, openSync, writeSync } from 'node:fs';
+    import { DatabaseSync } from 'node:sqlite';
+    const path = '/app/data/crew.sqlite';
+    const db = new DatabaseSync(path, { readOnly: true });
+    const rootPage = db.prepare("SELECT rootpage FROM sqlite_schema WHERE name='qualifications'").get().rootpage;
+    const pageSize = db.prepare("PRAGMA page_size").get().page_size;
+    db.close();
+    const file = openSync(path,'r+');
+    writeSync(file, Buffer.from([0]), 0, 1, (rootPage-1)*pageSize);
+    closeSync(file);
+  `);
   const failed = spawnSync("docker", composeArgs(broken, ["run", "--rm", "-T", "crew", "node", "admin.js", "invalidate-sessions"]), composeOptions);
   assert.equal(failed.error, undefined);
   assert.notEqual(failed.status, 0, "Eine beschädigte Datenbank darf nicht als bereit gemeldet werden.");
-  assert.match(failed.stderr, /file is not a database|database disk image is malformed/);
+  assert.match(failed.stderr, /Datenbank ist nicht intakt|database disk image is malformed/);
   assert.equal(sourceHash(), beforeFailure);
   const recoveredSource = await start(source);
   assert.equal((await fetch(recoveredSource + "/nachweis/1", { headers: oldCookie })).status, 404);
@@ -118,11 +132,15 @@ try {
   await verify(recoveredSource);
   maintenance(fallback, "invalidate-sessions");
   await verify(await start(fallback));
-  const commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim();
   console.log("Compose-Restore: Sitzungen, Konten, PDF, Einladungen, Rückmeldungen und Besetzung geprüft.");
   console.log(`Quellstand ${commit}, Laufzeitimage ${compose(source, ["images", "-q", "crew"])}.`);
 } finally {
   for (const project of [target, broken, fallback, source]) {
-    spawnSync("docker", composeArgs(project, ["down", "-v", "--remove-orphans"]), composeOptions);
+    const cleanup = spawnSync("docker", composeArgs(project, ["down", "-v", "--remove-orphans", "--rmi", "local"]), composeOptions);
+    if (cleanup.status !== 0) {
+      process.exitCode = 1;
+      console.error(`Aufräumen des Prüfprojekts ${project} fehlgeschlagen.`);
+    }
   }
 }
