@@ -1,4 +1,4 @@
-import { requireInput, transaction } from "./model.js";
+import { nextQualificationId, requireInput, transaction } from "./model.js";
 
 function requireQualificationPlace(db, person, name, message) {
   const { count, existing } = db.prepare(`SELECT count(*) AS count,count(*) FILTER (WHERE name=?) AS existing FROM (
@@ -10,7 +10,7 @@ function requireQualificationPlace(db, person, name, message) {
 
 export function submitQualification(db, person, name, validUntil, evidence) {
   requireQualificationPlace(db, person, name, "Alle 30 Plätze für Qualifikationen sind belegt oder durch Nachforderungen reserviert.");
-  db.prepare(`INSERT INTO qualifications (person,name,valid_until,evidence) VALUES (?,?,?,?)
+  db.prepare(`INSERT INTO qualifications (id,person,name,valid_until,evidence) VALUES (${nextQualificationId},?,?,?,?)
     ON CONFLICT(person,name) DO UPDATE SET valid_until=excluded.valid_until, evidence=excluded.evidence,
       verified=0, revision=qualifications.revision+1`).run(person, name, validUntil, evidence);
   db.prepare(`UPDATE qualification_requests SET state='submitted'
