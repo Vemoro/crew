@@ -18,18 +18,22 @@ test("Codegröße und Abstandsraster unterscheiden Grenzwerte von gültigen Ausn
     main::after { content: "; gap: 6px"; --test: padding: 3px; }
     :root { --sample-6px: 8px; }
     main { gap: var(--sample-6px); }
-    @supports (gap: 3px) { main { gap: 4px } }`);
+    @supports (gap: 3px) { main { gap: 4px } }
+    aside { gap: 8e0px; }`);
   mkdirSync(join(cwd, "test"));
   write("test/source.test.js", "// eine Testzeile\n".repeat(401));
   assert.equal(run().status, 0);
   write("source.js", "// eine Zeile\n".repeat(401));
-  write("form.css", "main { margin: calc(8px - 2px); gap: 6px; padding: var(--space, -2px); border: 1px solid }");
+  write("form.css", `main { margin: calc(8px - 2px); gap: 6px; padding: var(--space, -2px); border: 1px solid }
+    aside { gap: 1e1px; margin: 3E0px; }`);
   const rejected = run();
   assert.equal(rejected.status, 1);
   assert.match(rejected.stderr, /source\.js: 401 Zeilen/);
   assert.match(rejected.stderr, /margin: calc\(8px - 2px\)/);
   assert.match(rejected.stderr, /gap: 6px/);
   assert.match(rejected.stderr, /padding: var\(--space, -2px\)/);
+  assert.match(rejected.stderr, /gap: 1e1px/);
+  assert.match(rejected.stderr, /margin: 3E0px/);
   assert.doesNotMatch(rejected.stderr, /border|source\.test\.js/);
 });
 
