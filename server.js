@@ -86,6 +86,7 @@ function authLimit() {
       entry.count += 1;
       attempts.set(key, entry);
     }
+    return () => attempts.delete(keys[1]);
   };
 }
 
@@ -111,14 +112,12 @@ function saveSession(db, res, person, token, secure) {
   cookie(res, nextToken, secure);
 }
 
-async function submit({ db, req, res, user, token, path, secure, timezone, limit }) {
-  requireInput(user || path === "/anmelden" || path === "/registrieren", "Bitte melde dich an.");
-  const form = await readForm(req);
+async function submit({ db, req, res, token, path, form, secure, timezone, limit }) {
   if (path === "/anmelden" || path === "/registrieren") {
     const email = normalizeEmail(field(form, "email", 254));
     const password = form.get("password");
     requireInput(typeof password === "string" && password.length <= 128, "Anmeldedaten prüfen.");
-    limit(req.socket.remoteAddress, email);
+    const clearAccountLimit = limit(req.socket.remoteAddress, email);
     if (path === "/registrieren") {
       verifyPasswordLength(password);
       const name = field(form, "name", 100);
@@ -127,15 +126,17 @@ async function submit({ db, req, res, user, token, path, secure, timezone, limit
         VALUES (?,?,?,'staff','pending',?) ON CONFLICT(email) DO NOTHING`).run(email, name, passwordHash(password), availability);
       requireInput(result.changes === 1, "Registrierung nicht möglich. Wenn du bereits ein Konto hast, melde dich an.");
       saveSession(db, res, result.lastInsertRowid, token, secure);
+      clearAccountLimit();
       return "/";
     }
     const person = db.prepare("SELECT * FROM people WHERE email=?").get(email);
     const valid = checkPassword(password, person?.secret ?? dummyPassword);
     requireInput(person && valid, "E-Mail-Adresse oder Passwort stimmt nicht.");
     saveSession(db, res, person.id, token, secure);
+    clearAccountLimit();
     return homeFor(person);
   }
-  user = findUser(db, token);
+  const user = findUser(db, token);
   requireInput(user, "Bitte melde dich an.");
   if (path === "/abmelden") {
     db.prepare("DELETE FROM sessions WHERE token=?").run(sessionHash(token));
@@ -248,7 +249,7 @@ async function submit({ db, req, res, user, token, path, secure, timezone, limit
       "Eine Einladung benötigt eine offene Einladungsschicht und ein aktives Poolmitglied.");
       db.prepare("INSERT OR IGNORE INTO invitations VALUES (?,?)").run(shift.id, person);
     } else {
-      assign(db, shift.id, id(form, "person"), timezone);
+      assign(db, shift.id, id(form, "person"), id(form, "revision"), timezone);
     }
     return `/dispo#shift-${shift.id}`;
   }
@@ -265,8 +266,10 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
     res.setHeader("Cache-Control", "no-store");
     const token = /(?:^|;\s*)crew_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie ?? "")?.[1];
     let user;
+    let path;
+    let form;
     try {
-      const path = new URL(req.url, origin).pathname;
+      path = new URL(req.url, origin).pathname;
       if (req.method === "GET" && path === "/crew.css") {
         return res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" }).end(css);
       }
@@ -279,7 +282,9 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
       let status = 200;
       if (req.method === "POST") {
         requireInput(req.headers.origin === origin, "Der Ursprung des Formulars stimmt nicht. Öffne Crew über seine konfigurierte Adresse.");
-        const destination = await submit({ db, req, res, user, token, path, secure, timezone, limit });
+        requireInput(user || path === "/anmelden" || path === "/registrieren", "Bitte melde dich an.");
+        form = await readForm(req);
+        const destination = await submit({ db, req, res, token, path, form, secure, timezone, limit });
         if (destination) return redirect(res, destination);
         status = 404;
       } else if (req.method === "GET") {
@@ -305,7 +310,8 @@ export function createApp({ db, origin, timezone = Intl.DateTimeFormat().resolve
       const input = error instanceof InputError;
       if (!input) console.error("Crew-Anfrage fehlgeschlagen.", error.code ?? error.name);
       res.writeHead(input ? 422 : 500, { "Content-Type": "text/html; charset=utf-8" })
-        .end(render(db, user, timezone, "/fehler", input ? error.message : "Die Anfrage konnte nicht abgeschlossen werden."));
+        .end(render(db, user, timezone, "/fehler",
+          input ? error.message : "Die Anfrage konnte nicht abgeschlossen werden.", input ? { path, form } : undefined));
     }
   });
 }

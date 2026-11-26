@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { test } from "node:test";
-import { openDatabase, passwordHash } from "../model.js";
+import { missingQualifications, openDatabase, passwordHash } from "../model.js";
 import { createApp } from "../server.js";
 
 function future(days) {
@@ -64,7 +64,7 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
       starts: `${future(day)}T${start}`, ends: `${future(day)}T${end}`, ...fields }, 303);
   }
   await addShift("Aufbau", "80", 7, "14:00", "18:00", {
-    apply: "Staplerschein", assign: "Sicherheitsfreigabe", questions: "An welchem Eingang wartest du?",
+    apply: "Staplerschein", assign: "Sicherheitsfreigabe", questions: "An welchem Eingang wartest du?\nWann bist du vor Ort?",
   });
   await addShift("Abbau", "45", 7, "18:00", "20:00");
   await addShift("Einlass", "25", 7, "15:00", "17:00");
@@ -89,39 +89,65 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   await leni("/nachweis/1", undefined, 404);
   await admin("/dispo/nachweis", { qualification: 1, revision: 1 }, 303);
   assert.match(await mira("/interesse", { shift: 1 }, 422), /beantworte alle Fragen/);
-  await mira("/interesse", { shift: 1, answer: "Tor 4" }, 303);
+  const unanswered = new URLSearchParams([["shift", "1"], ["answer", "Beispiel Tor 4"], ["answer", " "]]);
+  const invalidAnswers = await mira("/interesse", unanswered, 422);
+  assert.match(invalidAnswers, /beantworte alle Fragen/);
+  assert.match(invalidAnswers, /<textarea[^>]*>Beispiel Tor 4<\/textarea>/);
+  await mira("/interesse", new URLSearchParams([["shift", "1"], ["answer", "Tor 4"], ["answer", "13:30"]]), 303);
   assert.match(await admin("/dispo"), /An welchem Eingang wartest du\?[\s\S]+Tor 4/);
   assert.match(await mira("/"), /sicherheitsfreigabe prüfen lassen/);
-  assert.match(await admin("/dispo/einteilen", { shift: 1, person: 2 }, 422), /Fehlende geprüfte Qualifikationen/);
+  assert.match(await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422), /Fehlende geprüfte Qualifikationen/);
   await mira("/qualifikation", { name: "Sicherheitsfreigabe", validUntil: future(1) }, 303);
   await admin("/dispo/nachweis", { qualification: 2, revision: 1 }, 303);
-  await admin("/dispo/einteilen", { shift: 1, person: 2 }, 422);
+  await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422);
   await mira("/qualifikation", { name: "Sicherheitsfreigabe", validUntil: future(8) }, 303);
-  await admin("/dispo/einteilen", { shift: 1, person: 2 }, 422);
+  await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422);
   await admin("/dispo/nachweis", { qualification: 2, revision: 1 }, 422);
   await admin("/dispo/nachweis", { qualification: 2, revision: 2 }, 303);
-  await admin("/dispo/einteilen", { shift: 1, person: 2 }, 303);
-  await admin("/dispo/einteilen", { shift: 1, person: 2 }, 303);
+  await mira("/absagen", { shift: 1 }, 303);
+  await mira("/interesse", new URLSearchParams([["shift", "1"], ["answer", "Tor 6"], ["answer", "13:30"]]), 303);
+  assert.match(await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 1 }, 422), /Bewerbung hat sich geändert/);
+  assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>0,00\s€/);
+  assert.match(await admin("/dispo"), /An welchem Eingang wartest du\?[\s\S]+Tor 6/);
+  await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 2 }, 303);
+  await admin("/dispo/einteilen", { shift: 1, person: 2, revision: 2 }, 303);
   assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>80,00\s€/);
   assert.match(await mira("/"), /Treffpunkt Tor 4/);
   await mira("/interesse", { shift: 2 }, 303);
   assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>80,00\s€/);
-  await admin("/dispo/einteilen", { shift: 2, person: 2 }, 303);
+  await admin("/dispo/einteilen", { shift: 2, person: 2, revision: 1 }, 303);
   assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>125,00\s€/);
 
   await mira("/interesse", { shift: 3 }, 303);
-  assert.match(await admin("/dispo/einteilen", { shift: 3, person: 2 }, 422), /zeitgleich/);
+  assert.match(await admin("/dispo/einteilen", { shift: 3, person: 2, revision: 1 }, 422), /zeitgleich/);
   await mira("/absagen", { shift: 1 }, 303);
   assert.match(await mira("/"), /Erwartete Vergütung<\/span><strong>45,00\s€/);
   assert.match(await admin("/dispo"), /0 von 1 Plätzen besetzt/);
   await leni("/interesse", { shift: 3 }, 303);
   const outcomes = await Promise.allSettled([
-    admin("/dispo/einteilen", { shift: 3, person: 2 }, 303),
-    admin("/dispo/einteilen", { shift: 3, person: 3 }, 303),
+    admin("/dispo/einteilen", { shift: 3, person: 2, revision: 1 }, 303),
+    admin("/dispo/einteilen", { shift: 3, person: 3, revision: 1 }, 303),
   ]);
   assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
   const rejected = outcomes.find(outcome => outcome.status === "rejected");
   assert.match(rejected.reason.message, /Alle Plätze sind bereits besetzt/);
   await mira("/abmelden", {}, 303);
   await mira("/nachweis/1", undefined, 404);
+  for (let count = 0; count < 9; count += 1) {
+    await mira("/anmelden", { email: "mira@example.test", password }, 303);
+    await mira("/abmelden", {}, 303);
+  }
+});
+
+test("Ein bis zum Schichttag gültiger Nachweis reicht bis zum exklusiven Ende um Mitternacht", t => {
+  const db = openDatabase(":memory:");
+  t.after(() => db.close());
+  db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'staff','active')")
+    .run("mira@example.test", "Mira Nord", "synthetic");
+  db.prepare("INSERT INTO qualifications (person,name,valid_until,verified) VALUES (1,'aufbau','2030-01-02',1)").run();
+  const requirements = JSON.stringify([{ name: "aufbau", timing: "assign" }]);
+  const atMidnight = { requirements, ends: "2030-01-02T23:00:00.000Z" };
+  const afterMidnight = { requirements, ends: "2030-01-02T23:01:00.000Z" };
+  assert.deepEqual(missingQualifications(db, atMidnight, 1, "assign", "Europe/Berlin"), []);
+  assert.deepEqual(missingQualifications(db, afterMidnight, 1, "assign", "Europe/Berlin"), ["aufbau"]);
 });

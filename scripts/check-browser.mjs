@@ -55,9 +55,14 @@ try {
   await admin.getByLabel("Schichtname").fill("Aufbau");
   const future = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
   await admin.getByLabel("Beginn").fill(future + "T14:00");
-  await admin.getByLabel("Ende").fill(future + "T18:00");
+  await admin.getByLabel("Ende").fill(future + "T12:00");
   await admin.getByLabel("Vergütung pro Person in Euro").fill("80");
   await admin.getByLabel("Pflichtfragen").fill("An welchem Eingang wartest du?");
+  await admin.getByRole("button", { name: "Schichtentwurf speichern" }).click();
+  await admin.getByRole("alert").getByText("Die Schicht muss in der Zukunft starten und danach enden.").waitFor();
+  assert.equal(await admin.getByLabel("Schichtname").inputValue(), "Aufbau");
+  assert.equal(await admin.getByLabel("Vergütung pro Person in Euro").inputValue(), "80");
+  await admin.getByLabel("Ende").fill(future + "T18:00");
   await admin.getByRole("button", { name: "Schichtentwurf speichern" }).click();
   await admin.getByRole("button", { name: "Schicht veröffentlichen" }).click();
   await staffMobile.goto(origin);

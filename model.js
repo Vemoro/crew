@@ -50,7 +50,7 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite") {
     CREATE TABLE IF NOT EXISTS responses (
       shift INTEGER NOT NULL REFERENCES shifts(id), person INTEGER NOT NULL REFERENCES people(id),
       status TEXT NOT NULL CHECK(status IN ('interested','assigned','withdrawn')),
-      answers TEXT NOT NULL, PRIMARY KEY(shift, person)
+      answers TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(shift, person)
     );
     CREATE INDEX IF NOT EXISTS responses_person_status ON responses(person, status);
     CREATE INDEX IF NOT EXISTS invitations_person ON invitations(person);
@@ -113,7 +113,8 @@ export const shiftQuery = `
 
 export function missingQualifications(db, shift, person, timing, timezone) {
   const verified = db.prepare("SELECT name, valid_until FROM qualifications WHERE person=? AND verified=1").all(person);
-  const lastDay = new Intl.DateTimeFormat("sv-SE", { timeZone: timezone }).format(new Date(shift.ends));
+  const lastInstant = new Date(Date.parse(shift.ends) - 1);
+  const lastDay = new Intl.DateTimeFormat("sv-SE", { timeZone: timezone }).format(lastInstant);
   return JSON.parse(shift.requirements)
     .filter(requirement => timing === "assign" || requirement.timing === "apply")
     .filter(requirement => !verified.some(q => q.name === requirement.name && (!q.valid_until || q.valid_until >= lastDay)))
@@ -137,16 +138,18 @@ export function respond(db, shiftId, person, answers, timezone) {
     requireInput(answers.length === questions.length && answers.every(answer => answer.length > 0 && answer.length <= 2000),
       "Bitte beantworte alle Fragen mit höchstens 2.000 Zeichen pro Antwort.");
     db.prepare(`INSERT INTO responses (shift,person,status,answers) VALUES (?,?,'interested',?)
-      ON CONFLICT(shift,person) DO UPDATE SET status='interested', answers=excluded.answers
-      WHERE responses.status <> 'assigned'`).run(shiftId, person, JSON.stringify(answers));
+      ON CONFLICT(shift,person) DO UPDATE SET status='interested', answers=excluded.answers, revision=responses.revision+1
+      WHERE responses.status='withdrawn' OR (responses.status='interested' AND responses.answers<>excluded.answers)`)
+      .run(shiftId, person, JSON.stringify(answers));
   });
 }
 
-export function assign(db, shiftId, person, timezone) {
+export function assign(db, shiftId, person, revision, timezone) {
   transaction(db, () => {
     const shift = db.prepare(shiftQuery + " WHERE s.id=?").get(shiftId);
-    const response = db.prepare(`SELECT r.status, p.status AS person_status
+    const response = db.prepare(`SELECT r.status, r.revision, p.status AS person_status
       FROM responses r JOIN people p ON p.id=r.person WHERE r.shift=? AND r.person=?`).get(shiftId, person);
+    requireInput(response?.revision === revision, "Die Bewerbung hat sich geändert. Bitte prüfe die aktuelle Rückmeldung.");
     if (response?.status === "assigned") return;
     requireInput(shift && response?.status === "interested" && response.person_status === "active"
       && canSee(db, shift, person), "Es liegt keine gültige Einsatzbewerbung vor.");

@@ -4,11 +4,12 @@ Crew läuft als einzelner Node.js-Dienst und speichert seine Daten in SQLite. F�
 
 ## Docker Compose
 
-Setze `CREW_ADMIN_PASSWORD` in der Umgebung deiner Shell auf ein eigenes Passwort mit mindestens zwölf Zeichen. Übergib das Passwort nur für die Kontoanlage.
+Setze `CREW_ADMIN_PASSWORD` in der Umgebung deiner Shell auf ein eigenes Passwort mit 12 bis 128 Zeichen. Entferne die Variable nach der Kontoanlage wieder aus der Shell.
 
 ```sh
 docker compose build
 docker compose run --rm -e CREW_ADMIN_PASSWORD crew node admin.js dispo@example.test "Crew Dispo"
+unset CREW_ADMIN_PASSWORD
 docker compose up -d
 ```
 
@@ -20,10 +21,11 @@ Du brauchst Node.js 24 ab Version 24.14. Crew hat keine externen npm-Laufzeitpak
 
 ```sh
 npm run admin -- dispo@example.test "Crew Dispo"
+unset CREW_ADMIN_PASSWORD
 npm start
 ```
 
-Setze `CREW_ADMIN_PASSWORD` vor der Kontoanlage wie oben beschrieben. Standardmäßig liegt der Datenbestand unter `data/crew.sqlite`. `CREW_DB` legt einen anderen Datenbankpfad fest. `npm test` prüft den HTTP-Ablauf in einer isolierten In-Memory-Datenbank.
+Setze `CREW_ADMIN_PASSWORD` vor der Kontoanlage wie oben beschrieben. Die Beispiele verwenden eine POSIX-Shell. In PowerShell entfernst du die Variable mit `Remove-Item Env:CREW_ADMIN_PASSWORD`. Standardmäßig liegt der Datenbestand unter `data/crew.sqlite`. `CREW_DB` legt einen anderen Datenbankpfad fest. `npm test` prüft den HTTP-Ablauf in einer isolierten In-Memory-Datenbank.
 
 ## Adresse und Zeitzone
 

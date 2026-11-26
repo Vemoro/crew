@@ -16,6 +16,7 @@ const empty = text => `<p class="muted">${text}</p>`;
 const statusLabel = { pending: "In Prüfung", active: "Im Pool", rejected: "Abgelehnt",
   interested: "Interesse gemeldet", assigned: "Eingeteilt", withdrawn: "Zurückgezogen",
   draft: "Entwurf", pool: "Im Pool sichtbar", invite: "Nur auf Einladung" };
+const alert = message => message ? `<p class="form-error" role="alert">${esc(message)}</p>` : "";
 
 function page(user, title, content) {
   const admin = user?.role === "admin";
@@ -29,22 +30,23 @@ function page(user, title, content) {
     <a href="#inhalt" class="skip">Zum Inhalt</a>
     <header><div class="header-inner"><a class="brand" href="${admin ? "/dispo" : "/"}">Crew<span aria-hidden="true">.</span></a>
     <nav class="desktop-nav" aria-label="Hauptnavigation">${nav}</nav>
-    <details class="mobile-nav"><summary>Menü</summary><nav aria-label="Hauptnavigation">${nav}</nav></details>
-    ${user ? post("/abmelden", button("Abmelden"), 'class="sign-out"') : ""}</div></header>
-    <main id="inhalt">${content}</main></body></html>`;
+    ${user ? post("/abmelden", button("Abmelden"), 'class="sign-out"') : ""}
+    <details class="mobile-nav"><summary>Menü</summary><nav aria-label="Hauptnavigation">${nav}</nav></details></div></header>
+    <main id="inhalt" tabindex="-1">${content}</main></body></html>`;
 }
 
-function auth(path) {
+function auth(path, message, values) {
   const registering = path === "/registrieren";
   const title = registering ? "Für den Personalpool bewerben" : "Bei Crew anmelden";
   return page(null, title, `<div class="narrow"><h1>${title}</h1>
     ${registering ? "<p>Die Dispo prüft deine Bewerbung. Den Status und deine Nachweise siehst du anschließend im Portal.</p>" : ""}
+    ${alert(message)}
     ${post(registering ? "/registrieren" : "/anmelden", `
-      ${registering ? label("Name", '<input name="name" maxlength="100" autocomplete="name" required>') : ""}
-      ${label("E-Mail-Adresse", '<input type="email" name="email" maxlength="254" autocomplete="email" required>')}
+      ${registering ? label("Name", `<input name="name" maxlength="100" autocomplete="name" value="${esc(values?.get("name"))}" required>`) : ""}
+      ${label("E-Mail-Adresse", `<input type="email" name="email" maxlength="254" autocomplete="email" value="${esc(values?.get("email"))}" required>`)}
       ${label(registering ? "Passwort (mindestens 12 Zeichen)" : "Passwort",
         `<input type="password" name="password" ${registering ? 'minlength="12"' : ""} maxlength="128" autocomplete="${registering ? "new-password" : "current-password"}" required>`)}
-      ${registering ? label("Verfügbarkeit (optional)", textarea("availability", 1000)) : ""}
+      ${registering ? label("Verfügbarkeit (optional)", textarea("availability", 1000, values?.get("availability"))) : ""}
       ${button(registering ? "Bewerbung starten" : "Anmelden")}`)}
     <p>${registering ? '<a href="/anmelden">Ich habe bereits ein Konto</a>' : '<a href="/registrieren">Für den Pool bewerben</a>'}</p></div>`);
 }
@@ -131,18 +133,23 @@ function staffHome(db, user, timezone) {
     + profile);
 }
 
-export function renderShift(db, user, id, timezone) {
+export function renderShift(db, user, id, timezone, failure) {
   const shift = db.prepare(shiftQuery + " WHERE s.id=? AND s.starts>?").get(id, new Date().toISOString());
   if (!shift || !canSee(db, shift, user.id)) return null;
   const missing = missingQualifications(db, shift, user.id, "apply", timezone);
   const allMissing = missingQualifications(db, shift, user.id, "assign", timezone);
   const response = db.prepare("SELECT status FROM responses WHERE shift=? AND person=?").get(id, user.id);
   const questions = JSON.parse(shift.questions);
+  const answers = failure?.form.getAll("answer") ?? [];
   const form = post("/interesse", hidden("shift", id)
-    + questions.map(question => label(question, textarea("answer", 2000, "", true))).join("")
+    + questions.map((question, index) => {
+      const previous = answers[index];
+      return label(question, textarea("answer", 2000, typeof previous === "string" ? previous.slice(0, 2000) : "", true));
+    }).join("")
     + button("Interesse melden"));
   return page(user, shift.title, `<a href="/#schichten">Alle offenen Schichten</a><p class="eyebrow">${esc(shift.event_title)}</p>
     <h1>${esc(shift.title)}</h1>${shiftFacts(shift, timezone)}
+    ${alert(failure?.message)}
     ${allMissing.length ? `<p>Noch zu prüfen: ${esc(allMissing.join(", "))}</p>` : ""}
     ${response && response.status !== "withdrawn" ? `<p class="badge">${statusLabel[response.status]}</p>`
       : missing.length ? box("Vor der Bewerbung erforderlich", `<p>${esc(missing.join(", "))}</p><a href="/#profil">Qualifikationen ansehen</a>`)
@@ -176,9 +183,9 @@ function planningShift(db, shift, staff, timezone) {
       + label("Veröffentlichen für", '<select name="visibility"><option value="pool">Aktiver Pool</option><option value="invite">Nur eingeladene Personen</option></select>')
       + button("Schicht veröffentlichen")) : ""}
     ${shift.visibility === "invite" && invitationNames.length ? `<p>Eingeladen: ${esc(invitationNames.map(row => row.name).join(", "))}</p>` : ""}
-    ${isUpcoming && shift.visibility === "invite" && invitations.length ? post("/dispo/einladen", hidden("shift", shift.id)
+    ${isUpcoming && shift.visibility === "invite" && invitations.length ? `<details><summary>Poolmitglied einladen</summary>${post("/dispo/einladen", hidden("shift", shift.id)
       + label("Poolmitglied", `<select name="person">${invitations.map(person => `<option value="${person.id}">${esc(person.name)} · ${esc(person.email)}</option>`).join("")}</select>`)
-      + button("Einladung im Portal bereitstellen")) : ""}
+      + button("Einladung im Portal bereitstellen"))}</details>` : ""}
     ${responses.length ? `<ul class="items">${responses.map(response => {
       const missing = missingQualifications(db, shift, response.person, "assign", timezone);
       const answers = JSON.parse(response.answers);
@@ -186,11 +193,28 @@ function planningShift(db, shift, staff, timezone) {
       ${answers.length ? `<dl>${answers.map((answer, index) => `<dt>${esc(questions[index])}</dt><dd>${esc(answer)}</dd>`).join("")}</dl>` : ""}
       ${response.status === "interested" && missing.length ? `<p>Fehlende Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${response.status === "interested" && isUpcoming && !missing.length && shift.filled < shift.slots
-        ? post("/dispo/einteilen", hidden("shift", shift.id) + hidden("person", response.person) + button("Besetzung bestätigen")) : ""}</li>`;
+        ? post("/dispo/einteilen", hidden("shift", shift.id) + hidden("person", response.person)
+          + hidden("revision", response.revision) + button("Besetzung bestätigen")) : ""}</li>`;
     }).join("")}</ul>` : empty("Noch keine Rückmeldungen.")}</div>`;
 }
 
-function adminHome(db, user, timezone) {
+function shiftForm(event, timezone, failure) {
+  const values = failure?.form;
+  return `<details ${failure ? "open" : ""}><summary>Schicht hinzufügen</summary>${alert(failure?.message)}
+    ${post("/dispo/schicht", hidden("event", event.id)
+    + label("Schichtname", `<input name="title" required maxlength="120" value="${esc(values?.get("title"))}">`)
+    + `<div class="form-grid">${label("Beginn", `<input name="starts" type="datetime-local" required value="${esc(values?.get("starts"))}">`)}
+      ${label("Ende", `<input name="ends" type="datetime-local" required value="${esc(values?.get("ends"))}">`)}</div>
+      <p class="muted">Zeitzone: ${esc(timezone)}</p><div class="form-grid">
+      ${label("Plätze", `<input name="slots" type="number" min="1" max="999" value="${esc(values?.get("slots") ?? "1")}" required>`)}
+      ${label("Vergütung pro Person in Euro", `<input name="pay" inputmode="decimal" maxlength="10" value="${esc(values?.get("pay"))}" required>`)}</div>`
+    + label("Vor Bewerbung nötig (eine Qualifikation pro Zeile)", textarea("apply", 2000, values?.get("apply")))
+    + label("Vor Einteilung nötig (eine Qualifikation pro Zeile)", textarea("assign", 2000, values?.get("assign")))
+    + label("Pflichtfragen (eine Frage pro Zeile)", textarea("questions", 2000, values?.get("questions")))
+    + button("Schichtentwurf speichern"))}</details>`;
+}
+
+function adminHome(db, user, timezone, failure) {
   const staff = db.prepare("SELECT id,name,email,status,availability,review_note FROM people WHERE role='staff' ORDER BY status='pending' DESC,name").all();
   const events = db.prepare("SELECT * FROM events ORDER BY id DESC").all();
   const shifts = db.prepare(shiftQuery + " ORDER BY s.starts").all();
@@ -201,6 +225,7 @@ function adminHome(db, user, timezone) {
     ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000))}
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
+    ${failure ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
     <div class="overview"><div><span class="muted">Bewerbungen in Prüfung</span><strong>${staff.filter(p => p.status === "pending").length}</strong></div>
     <div><span class="muted">Aktive Poolmitglieder</span><strong>${staff.filter(p => p.status === "active").length}</strong></div></div>`
     + box("Personal", staff.length ? `<ul class="items">${staff.map(person => staffReview(db, person)).join("")}</ul>`
@@ -208,21 +233,27 @@ function adminHome(db, user, timezone) {
     + box("Einsätze", `<details ${events.length ? "" : "open"}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
       ${esc(event.location)}${event.reference ? " · " + esc(event.reference) : ""}</p>
-      <details><summary>Schicht hinzufügen</summary>${post("/dispo/schicht", hidden("event", event.id)
-        + label("Schichtname", '<input name="title" required maxlength="120">')
-        + `<div class="form-grid">${label("Beginn", '<input name="starts" type="datetime-local" required>')}
-          ${label("Ende", '<input name="ends" type="datetime-local" required>')}</div>
-          <p class="muted">Zeitzone: ${esc(timezone)}</p><div class="form-grid">
-          ${label("Plätze", '<input name="slots" type="number" min="1" max="999" value="1" required>')}
-          ${label("Vergütung pro Person in Euro", '<input name="pay" inputmode="decimal" maxlength="10" required>')}</div>`
-        + label("Vor Bewerbung nötig (eine Qualifikation pro Zeile)", textarea("apply", 2000))
-        + label("Vor Einteilung nötig (eine Qualifikation pro Zeile)", textarea("assign", 2000))
-        + label("Pflichtfragen (eine Frage pro Zeile)", textarea("questions", 2000))
-        + button("Schichtentwurf speichern"))}</details>
+      ${shiftForm(event, timezone, failure?.event === event.id ? failure : undefined)}
       ${shifts.filter(shift => shift.event === event.id).map(shift => planningShift(db, shift, staff, timezone)).join("")}</article>`).join("")}`, "einsaetze"));
 }
 
-export function render(db, user, timezone, path, message) {
+export function render(db, user, timezone, path, message, failure) {
+  if (message && failure?.form) {
+    if (user?.role === "admin" && failure.path === "/dispo/schicht") {
+      const event = Number(failure.form.get("event"));
+      if (Number.isSafeInteger(event) && db.prepare("SELECT 1 FROM events WHERE id=?").get(event)) {
+        return adminHome(db, user, timezone, { event, form: failure.form, message });
+      }
+    }
+    if (!user && ["/anmelden", "/registrieren"].includes(failure.path)) return auth(failure.path, message, failure.form);
+    if (user?.role === "staff" && user.status === "active" && failure.path === "/interesse") {
+      const shift = Number(failure.form.get("shift"));
+      if (Number.isSafeInteger(shift)) {
+        const content = renderShift(db, user, shift, timezone, { form: failure.form, message });
+        if (content) return content;
+      }
+    }
+  }
   if (message) return page(user, "Hinweis", `<div class="narrow"><h1>Hinweis</h1><p role="alert">${esc(message)}</p>
     <a href="${user?.role === "admin" ? "/dispo" : "/"}">Zur Übersicht</a></div>`);
   if (!user) return auth(path);
