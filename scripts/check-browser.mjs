@@ -1,12 +1,19 @@
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 import { once } from "node:events";
 import { mkdirSync } from "node:fs";
+import { platform, release } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import { createApp } from "../server.js";
 import { openDatabase, passwordHash } from "../model.js";
+import { checkEvidence } from "./browser-evidence.mjs";
+import { checkMobilePlanning } from "./browser-mobile.mjs";
 
-const browser = await chromium.launch({ channel: process.env.CREW_BROWSER_CHANNEL, headless: true });
+const engine = process.env.CREW_BROWSER_ENGINE || "chromium";
+const engines = { chromium, webkit };
+assert.ok(Object.hasOwn(engines, engine), "CREW_BROWSER_ENGINE muss chromium oder webkit sein.");
+const browser = await engines[engine].launch({ channel: engine === "chromium" ? process.env.CREW_BROWSER_CHANNEL : undefined, headless: true });
+console.log(`${engine} ${browser.version()}, ${platform()} ${release()}, Touch-Emulation bei 360 und 390 CSS-Pixeln.`);
 const db = openDatabase(":memory:");
 const password = "synthetic-browser-password";
 db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'admin','active')")
@@ -17,7 +24,7 @@ const app = createApp({ db, origin });
 let runningApp = app;
 app.listen(port, "127.0.0.1");
 await once(app, "listening");
-const screenshotDirectory = process.env.CREW_SCREENSHOTS || "build/screenshots";
+const screenshotDirectory = process.env.CREW_SCREENSHOTS || (engine === "chromium" ? "build/screenshots" : "build/webkit");
 mkdirSync(screenshotDirectory, { recursive: true });
 const show = (page, name, fullPage = true) => page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
 
@@ -25,7 +32,8 @@ try {
   const desktop = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
   const staff = await desktop.newPage();
   await staff.goto(origin + "/registrieren");
-  await staff.keyboard.press("Tab");
+  if (engine === "webkit") await staff.getByRole("link", { name: "Zum Inhalt" }).focus();
+  else await staff.keyboard.press("Tab");
   assert.equal(await staff.evaluate(() => document.activeElement.textContent), "Zum Inhalt");
   await staff.keyboard.press("Enter");
   await staff.getByLabel("Name", { exact: true }).fill("Mira Nord");
@@ -34,6 +42,7 @@ try {
   await staff.getByLabel("Verfügbarkeit").fill("Samstags ab 13 Uhr");
   await staff.getByRole("button", { name: "Bewerbung starten" }).click();
   await staff.getByText("In Prüfung", { exact: true }).waitFor();
+  await checkEvidence(staff, show);
 
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", isMobile: true, deviceScaleFactor: 1, hasTouch: true, locale: "de-DE" });
   await mobile.addCookies(await desktop.cookies());
@@ -48,6 +57,7 @@ try {
   await admin.getByText("Mira Nord", { exact: false }).first().click();
   await admin.getByLabel("Entscheidung").selectOption("active");
   await admin.getByRole("button", { name: "Entscheidung speichern" }).click();
+  await admin.locator("#person-2").getByText("Im Pool", { exact: true }).waitFor();
   await admin.getByLabel("Einsatzname").fill(" ");
   await admin.getByLabel("Ort", { exact: true }).fill("Musterhalle");
   await admin.getByLabel("Treffpunkt und Hinweise").fill("Treffpunkt Tor 4");
@@ -71,6 +81,7 @@ try {
   await admin.getByLabel("Ende").fill(future + "T18:00");
   await admin.getByRole("button", { name: "Schichtentwurf speichern" }).click();
   await admin.getByRole("button", { name: "Schicht veröffentlichen" }).click();
+  await admin.getByText("Im Pool sichtbar", { exact: true }).waitFor();
   await staffMobile.goto(origin);
   const mobileMenu = staffMobile.getByText("Menü", { exact: true });
   assert.ok((await mobileMenu.boundingBox()).height >= 44);
@@ -83,6 +94,7 @@ try {
   await admin.reload();
   await admin.getByText("Tor 4", { exact: true }).waitFor();
   await admin.getByRole("button", { name: "Besetzung bestätigen" }).click();
+  await admin.getByText("Eingeteilt", { exact: true }).waitFor();
   await staff.goto(origin);
   await staff.getByText("Treffpunkt Tor 4", { exact: true }).waitFor();
   assert.match(await staff.locator(".overview").innerText(), /80,00\s€/);
@@ -94,6 +106,8 @@ try {
   await admin.getByRole("button", { name: "Schichtentwurf speichern" }).click();
   await admin.getByLabel("Veröffentlichen für").selectOption("invite");
   await admin.getByRole("button", { name: "Schicht veröffentlichen" }).click();
+  await admin.getByRole("button", { name: "Poolmitglied einladen" }).waitFor();
+  await checkMobilePlanning(browser, planning, origin, show, engine);
   const inviteButton = admin.getByRole("button", { name: "Poolmitglied einladen" });
   await inviteButton.click();
   const inviteDialog = admin.getByRole("dialog", { name: "Poolmitglied einladen" });
@@ -111,9 +125,11 @@ try {
   await show(staff, "personal-dunkel");
   await staffMobile.goto(origin);
   assert.equal(await staffMobile.evaluate(() => document.documentElement.scrollWidth === innerWidth), true);
-  for (const expected of ["Zum Inhalt", "Crew.", "Abmelden", "Menü"]) {
-    await staffMobile.keyboard.press("Tab");
-    assert.equal(await staffMobile.evaluate(() => document.activeElement.textContent.trim()), expected);
+  if (engine === "chromium") {
+    for (const expected of ["Zum Inhalt", "Crew.", "Abmelden", "Menü"]) {
+      await staffMobile.keyboard.press("Tab");
+      assert.equal(await staffMobile.evaluate(() => document.activeElement.textContent.trim()), expected);
+    }
   }
   await staffMobile.locator("h1").click();
   await show(staffMobile, "personal-handy-dunkel");
@@ -137,15 +153,17 @@ try {
 
   await staff.getByRole("link", { name: "Schicht ansehen", exact: true }).click();
   await staff.getByRole("button", { name: "Interesse melden" }).click();
+  await staff.getByText("Interesse gemeldet", { exact: true }).waitFor();
   await admin.reload();
   const secondShift = admin.locator("#shift-2");
   await secondShift.getByRole("button", { name: "Besetzung bestätigen" }).click();
+  await secondShift.getByText("Eingeteilt", { exact: true }).waitFor();
   await staff.reload();
   assert.match(await staff.locator(".overview").innerText(), /125,00\s€/);
   await admin.getByText("Ort und Hinweise korrigieren", { exact: true }).click();
   await admin.getByText("Die Änderung betrifft diese Schichten", { exact: true }).waitFor();
   await admin.getByText(/^Aufbau ·/).waitFor();
-  await show(admin, "einsatzkorrektur-hell");
+  await show(admin, "einsatzkorrektur-dunkel");
   await admin.getByLabel("Korrigierter Ort").fill("Andere Musterhalle");
   await admin.getByRole("button", { name: "Angaben aktualisieren" }).click();
   await secondShift.getByRole("button", { name: "Platz freigeben", exact: true }).click();
@@ -165,11 +183,13 @@ try {
     .evaluate(field => field === document.activeElement), true);
   await admin.keyboard.press("Enter");
   await release.getByRole("button", { name: "Platzfreigabe bestätigen" }).click();
+  await secondShift.getByText("Durch die Dispo freigegeben", { exact: true }).waitFor();
   await staff.reload();
   assert.match(await staff.locator(".overview").innerText(), /80,00\s€/);
   await staff.getByText("Durch die Dispo freigegeben", { exact: true }).waitFor();
   await secondShift.getByRole("button", { name: "Schicht zurücknehmen", exact: true }).click();
   await admin.getByRole("dialog", { name: "Schicht zurücknehmen?" }).getByRole("button", { name: "Rücknahme bestätigen" }).click();
+  await secondShift.getByText("Schicht zurückgenommen", { exact: true }).waitFor();
   await staff.reload();
   await staff.getByText("Schicht zurückgenommen", { exact: true }).waitFor();
   await admin.setViewportSize({ width: 1280, height: 900 });
@@ -261,7 +281,7 @@ try {
   await pausedPortal.getByRole("button", { name: "Anmelden", exact: true }).click();
   await pausedPortal.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
   await pausedPortal.close();
-  console.log("Browser: Kernablauf, Absagedialog, Kontosperre und pausierte Registrierung geprüft.");
+  console.log("Browser: Kernablauf, PDF, schmale Dispo, Tastatur und pausierte Registrierung geprüft.");
 } finally {
   await browser.close();
   await new Promise(resolve => runningApp.close(resolve));
