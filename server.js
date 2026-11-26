@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
-  assign, canSee, checkPassword, InputError, normalizeEmail, openDatabase, passwordHash,
+  assign, canSee, checkPassword, InputError, nextPersonId, normalizeEmail, openDatabase, passwordHash,
   qualificationName, requireInput, respond, sessionHash, transaction, updatePoolAccess, verifyPasswordLength,
 } from "./model.js";
 import { render, renderEvidence, renderShift } from "./views.js";
@@ -128,8 +128,8 @@ function submitAccount({ db, client, res, token, path, form, secure, limit }) {
     const name = field(form, "name", 100);
     const availability = field(form, "availability", 1000, false);
     const secret = passwordHash(password);
-    const result = db.prepare(`INSERT INTO people (email,name,secret,role,status,availability)
-      VALUES (?,?,?,'staff','pending',?) ON CONFLICT(email) DO NOTHING`).run(email, name, secret, availability);
+    const result = db.prepare(`INSERT INTO people (id,email,name,secret,role,status,availability)
+      VALUES (${nextPersonId},?,?,?,'staff','pending',?) ON CONFLICT(email) DO NOTHING`).run(email, name, secret, availability);
     requireInput(result.changes === 1, "Registrierung nicht möglich. Wenn du bereits ein Konto hast, melde dich an.");
     saveSession(db, res, { id: result.lastInsertRowid, secret }, token, secure);
     clearAccountLimit();
