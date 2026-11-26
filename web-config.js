@@ -3,11 +3,14 @@ import { isIP } from "node:net";
 export function canonicalAddress(value) {
   if (typeof value !== "string") return "";
   const address = value.trim().toLowerCase();
-  if (address.startsWith("::ffff:") && isIP(address.slice(7)) === 4) return address.slice(7);
   const family = isIP(address);
   if (family === 4) return address;
-  if (family === 6 && !address.includes("%")) return new URL(`http://[${address}]/`).hostname.slice(1, -1);
-  return "";
+  if (family !== 6 || address.includes("%")) return "";
+  const normalized = new URL(`http://[${address}]/`).hostname.slice(1, -1);
+  const parts = /^::ffff:([a-f0-9]+):([a-f0-9]+)$/.exec(normalized);
+  if (!parts) return normalized;
+  const [high, low] = parts.slice(1).map(value => Number.parseInt(value, 16));
+  return [high >> 8, high & 255, low >> 8, low & 255].join(".");
 }
 
 export function clientAddress(req, trustedProxy) {

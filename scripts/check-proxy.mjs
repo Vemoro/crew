@@ -62,6 +62,8 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   assert.equal(admin.status, 303);
   assert.match(admin.headers["set-cookie"][0], /; Secure/);
   assert.equal(admin.headers["strict-transport-security"], "max-age=31536000");
+  const adminPortal = await browser("/dispo", { cookie: admin.headers["set-cookie"][0].split(";")[0] });
+  assert.match(adminPortal.html, /Personal und Einsätze/);
   for (let attempt = 0; attempt < 50; attempt += 1) {
     assert.equal((await browser("/anmelden", { localAddress: "127.0.0.2", data: {
       email: `offen-${attempt}@example.test`, password,
@@ -71,6 +73,9 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   assert.match(rateLimited.html, /Zu viele Versuche/);
   const staff = await browser("/anmelden", { localAddress: "127.0.0.3", data: { email: "mira@example.test", password } });
   assert.equal(staff.status, 303);
+  assert.match(staff.headers["set-cookie"][0], /; Secure/);
+  const staffPortal = await browser("/", { cookie: staff.headers["set-cookie"][0].split(";")[0] });
+  assert.match(staffPortal.html, /Hallo, Mira/);
 
   const direct = await send(httpRequest, `http://127.0.0.1:${upstreamPort}/anmelden`, {
     origin, localAddress: "127.0.0.4", data: { email: "mira@example.test", password },
@@ -79,11 +84,12 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   assert.equal(direct.status, 303, "Die fremde Forwarding-Angabe darf den bereits begrenzten Client nicht auswählen.");
 });
 
-function send(request, url, { ca, origin, localAddress, data, forwardedFor }) {
+function send(request, url, { ca, origin, localAddress, data, forwardedFor, cookie }) {
   const body = data ? new URLSearchParams(data).toString() : "";
   const headers = body ? { Origin: origin, "Content-Type": "application/x-www-form-urlencoded",
     "Content-Length": Buffer.byteLength(body) } : {};
   if (forwardedFor) headers["X-Forwarded-For"] = forwardedFor;
+  if (cookie) headers.Cookie = cookie;
   return new Promise((resolve, reject) => {
     const req = request(url, { ca, localAddress, method: body ? "POST" : "GET", headers }, res => {
       res.setEncoding("utf8");

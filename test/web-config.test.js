@@ -16,6 +16,8 @@ test("Nur der konfigurierte Proxy kann eine einzelne gültige Client-IP bereitst
   const req = { socket: { remoteAddress: "::ffff:127.0.0.1" },
     headers: { "x-forwarded-for": "2001:0DB8::0001" } };
   assert.equal(clientAddress(req, "127.0.0.1"), "2001:db8::1");
+  const mappedProxy = webConfig({ CREW_TRUSTED_PROXY: "::ffff:7f00:1" });
+  assert.equal(clientAddress(req, mappedProxy.trustedProxy), "2001:db8::1");
   assert.equal(clientAddress(req, "127.0.0.2"), "127.0.0.1");
   req.headers["x-forwarded-for"] = "203.0.113.1, 127.0.0.1";
   assert.equal(clientAddress(req, "127.0.0.1"), "127.0.0.1");

@@ -54,6 +54,8 @@ Betreibe Crew mit genau einer Anwendungsinstanz. Schütze Datenbank und Sicherun
 
 Beende TLS am Reverse-Proxy und setze `CREW_ORIGIN` auf seine HTTPS-Origin. Crew erstellt dafür sichere Sitzungscookies. Halte den HTTP-Upstream nur für den Proxy erreichbar und leite Browser auf HTTPS um. Setze `CREW_TRUSTED_PROXY` nur auf die einzelne IP-Adresse, mit der sich der unmittelbar vorgeschaltete Proxy bei Crew meldet. Bei nativer Installation mit einem Proxy auf demselben Host kann das `127.0.0.1` sein. In Compose kann sich die intern sichtbare Adresse von der Hostadresse unterscheiden.
 
+Vertraue einer Loopback- oder Gateway-IP nur, wenn alle über diese IP sichtbaren Zugriffe durch den Proxy kontrolliert werden. Sonst lasse die Einstellung leer. Nach einer Konfigurationsänderung übernimmt `docker compose up -d` die geänderten Werte in einen neu erstellten Container. Bei nativer Installation starte den Prozess mit den neuen Werten neu.
+
 Der vertrauenswürdige Proxy überschreibt `X-Forwarded-For` mit genau der Client-IP. Ein Nginx-Abschnitt für einen nativen Crew-Dienst auf demselben Rechner kann so aussehen:
 
 ```nginx
@@ -64,10 +66,10 @@ location / {
 }
 ```
 
-Crew verwendet die Client-IP zusammen mit dem Konto für die Anmeldebegrenzung. Ohne konfigurierten vertrauenswürdigen Proxy oder bei einem ungültigen weitergeleiteten Wert verwendet Crew die direkt verbundene IP. Direkte Verbindungen aus dem öffentlichen Netz gehören nicht an den HTTP-Upstream.
+Die Anmeldebegrenzung zählt Versuche getrennt pro Client-IP und pro Konto. Ohne konfigurierten vertrauenswürdigen Proxy oder bei einem ungültigen weitergeleiteten Wert verwendet Crew die direkt verbundene IP. Direkte Verbindungen aus dem öffentlichen Netz gehören nicht an den HTTP-Upstream.
 
 ## Selbstregistrierung pausieren
 
-Mit `CREW_REGISTRATION=paused` und einem Neustart nimmt Crew keine neuen Selbstregistrierungen an. Bestehende Konten können sich weiter anmelden. Setze den Wert auf `open`, um den Bewerberzugang wieder zu öffnen.
+Mit `CREW_REGISTRATION=paused` nimmt Crew keine neuen Selbstregistrierungen an. Übernimm die Änderung mit `docker compose up -d` oder starte den nativen Prozess mit dem neuen Wert. Bestehende Konten können sich weiter anmelden. Setze den Wert auf `open` und übernimm die Änderung auf demselben Weg, um den Bewerberzugang wieder zu öffnen.
 
 `node scripts/check-proxy.mjs` prüft den synthetischen HTTPS-Proxy, die abgeschaltete Registrierung und die Anmeldebegrenzung auf einem lokalen Prüfstand. Die Probe benötigt OpenSSL. Unter Windows kann `CREW_OPENSSL` auf dessen ausführbare Datei zeigen.
