@@ -1,10 +1,11 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
-export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite") {
-  if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite", { initialize = true } = {}) {
+  if (!initialize) requireInput(existsSync(path), "Crew-Datenbank nicht gefunden.");
+  if (initialize && path !== ":memory:") mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path);
   db.exec(`
     PRAGMA foreign_keys = ON;
@@ -13,6 +14,7 @@ export function openDatabase(path = process.env.CREW_DB || "data/crew.sqlite") {
   `);
   transaction(db, () => {
     const { user_version: version } = db.prepare("PRAGMA user_version").get();
+    requireInput(initialize || version > 0, "Der Datenbestand wurde noch nicht als Crew-Datenbank eingerichtet.");
     if (version > 3) throw new Error("Unbekannte Version der Crew-Datenbank.");
     if (version === 0) db.exec(`
     CREATE TABLE people (
