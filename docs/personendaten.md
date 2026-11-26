@@ -10,7 +10,7 @@ Wähle einen neuen Ordner innerhalb eines geschützten, bereits vorhandenen Verz
 node people-admin.js export mira@example.test /geschuetzt/crew-export/mira
 ```
 
-Bei Compose verwende nach `docker compose stop crew` ein zusätzliches Bind-Mount auf ein geschütztes Verzeichnis des Hosts. Das Dienstkonto aus dem Container muss dort schreiben können.
+Bei Compose verwende nach `docker compose stop crew` ein zusätzliches Bind-Mount auf ein geschütztes Verzeichnis des Hosts. Das Dienstkonto aus dem Container muss dort schreiben können. Führe die Befehle mit demselben Compose-Projekt wie der Dienst aus. Wenn du den Projektnamen mit `-p` gesetzt hast, gib ihn weiter an.
 
 ```sh
 docker compose run --rm --no-deps -v /geschuetzt/crew-export:/export crew node people-admin.js export mira@example.test /export/mira
@@ -32,3 +32,5 @@ docker compose run --rm --no-deps crew node people-admin.js erase mira@example.t
 ```
 
 Die Bereinigung entfernt das Poolprofil, Einladungen, Bewerbungen und Antworten, Einteilungen, Nachforderungen, Nachweise und Sitzungen aus dem aktiven Bestand. Für alte Schichten bleibt die Anzahl der eingeteilten Plätze erhalten. Prüfe bei einem späteren Restore, welche Bereinigungen du erneut ausführen musst, bevor der Dienst zugänglich wird. Führe dafür eine zugriffsgeschützte betriebliche Aufzeichnung mit angemessener eigener Aufbewahrung. Plane alte Sicherungen, Exportkopien und Dateisystem-Snapshots mit ein. [Sicherung und Wiederanlauf](sicherung.md)
+
+Starte nach Abschluss den angehaltenen Dienst wieder. Unter Compose verwende `docker compose up -d crew` mit demselben Projektnamen.
