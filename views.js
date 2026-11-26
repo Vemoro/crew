@@ -1,21 +1,16 @@
 import { canSee, missingQualifications, shiftQuery } from "./model.js";
+import { button, esc, hidden, label, post, textarea } from "./forms.js";
+import { correctionForm, releasePlaceControl, withdrawShiftControl } from "./planning-controls.js";
 
-const esc = value => String(value ?? "").replace(/[&<>"']/g, char =>
-  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const money = cents => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(cents / 100);
 const date = (value, timezone) => new Intl.DateTimeFormat("de-DE",
   { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(value));
-const hidden = (name, value) => `<input type="hidden" name="${name}" value="${esc(value)}">`;
-const post = (action, content, attrs = "") => `<form method="post" action="${action}" ${attrs}>${content}</form>`;
-const button = text => `<button type="submit">${text}</button>`;
-const label = (text, content) => `<label><span>${esc(text)}</span>${content}</label>`;
-const textarea = (name, limit, value = "", required = false) =>
-  `<textarea name="${name}" maxlength="${limit}" rows="2" ${required ? "required" : ""}>${esc(value)}</textarea>`;
 const box = (title, body, id = "") => `<section ${id ? `id="${id}"` : ""}><h2>${esc(title)}</h2>${body}</section>`;
 const empty = text => `<p class="muted">${text}</p>`;
 const statusLabel = { pending: "In Prüfung", active: "Im Pool", rejected: "Abgelehnt",
   interested: "Interesse gemeldet", assigned: "Eingeteilt", withdrawn: "Zurückgezogen",
-  draft: "Entwurf", pool: "Im Pool sichtbar", invite: "Nur auf Einladung" };
+  draft: "Entwurf", pool: "Im Pool sichtbar", invite: "Nur auf Einladung",
+  cancelled: "Schicht zurückgenommen", released: "Durch die Dispo freigegeben" };
 const statusTone = { pending: "warning", active: "ok", rejected: "danger", interested: "info", assigned: "ok", draft: "draft" };
 const status = state => `<span class="status ${statusTone[state] ?? "neutral"}"><span aria-hidden="true"></span>${statusLabel[state]}</span>`;
 const alert = message => message ? `<p class="form-error" role="alert">${esc(message)}</p>` : "";
@@ -84,7 +79,7 @@ export function renderEvidence(db, res, user, id) {
 
 function shiftFacts(shift, timezone) {
   return `<p class="muted">${esc(shift.location)} · ${esc(date(shift.starts, timezone))} bis ${esc(date(shift.ends, timezone))}</p>
-    <p class="facts"><strong>${money(shift.cents)}</strong> pro Schicht · ${shift.filled} von ${shift.slots} Plätzen besetzt</p>`;
+    ${shift.cancelled_at ? "" : `<p class="facts"><strong>${money(shift.cents)}</strong> pro Schicht · ${shift.filled} von ${shift.slots} Plätzen besetzt</p>`}`;
 }
 
 function shiftList(shifts, timezone, detail) {
@@ -125,9 +120,13 @@ function staffHome(db, user, timezone) {
   const now = new Date().toISOString();
   const responses = db.prepare(shiftQuery + ` JOIN responses r ON r.shift=s.id
     WHERE r.person=? ORDER BY s.starts`).all(user.id);
-  const responsesByShift = new Map(db.prepare("SELECT shift, status, revision FROM responses WHERE person=?").all(user.id)
+  const responsesByShift = new Map(db.prepare("SELECT shift,status,revision,released_by_dispo FROM responses WHERE person=?").all(user.id)
     .map(response => [response.shift, response]));
-  const stateFor = shift => responsesByShift.get(shift.id)?.status;
+  const stateFor = shift => shift.cancelled_at ? "cancelled"
+    : responsesByShift.get(shift.id)?.released_by_dispo ? "released" : responsesByShift.get(shift.id)?.status;
+  const cancelledInvites = db.prepare(shiftQuery + ` JOIN invitations i ON i.shift=s.id
+    WHERE i.person=? AND s.cancelled_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM responses r WHERE r.shift=s.id AND r.person=i.person) ORDER BY s.starts`).all(user.id);
   const upcoming = responses.filter(shift => shift.ends > now && stateFor(shift) === "assigned");
   const open = db.prepare(shiftQuery + " WHERE s.starts>? AND s.visibility<>'draft' ORDER BY s.starts").all(now)
     .filter(shift => canSee(db, shift, user.id) && !["assigned", "interested"].includes(stateFor(shift)));
@@ -146,7 +145,7 @@ function staffHome(db, user, timezone) {
     + box("Offene Schichten", shiftList(open, timezone, shift =>
       `<a href="/schichten/${shift.id}">${shift.filled >= shift.slots ? "Für die Nachbesetzung vormerken" : "Schicht ansehen"}</a>`)
       || empty("Zurzeit gibt es keine neuen Schichtangebote für dich."), "schichten")
-    + box("Meine Rückmeldungen", shiftList(responses, timezone, shift =>
+    + box("Meine Rückmeldungen", shiftList([...responses, ...cancelledInvites], timezone, shift =>
       `<p>${status(stateFor(shift))}</p>${stateFor(shift) === "interested" ? withdraw(shift) : ""}`)
       || empty("Deine Bewerbungen und Zusagen erscheinen hier."), "bewerbungen")
     + box("Aufgaben", (user.review_note ? `<p>${esc(user.review_note)}</p>` : "")
@@ -205,22 +204,23 @@ function staffReview(db, person, failure) {
       + button("Entscheidung speichern")) : poolAccessControls(person)}</details></li>`;
 }
 
-function planningShift(db, shift, staff, timezone) {
+function planningShift(db, shift, staff, timezone, failure) {
   const responses = db.prepare(`SELECT r.*, p.name, p.access_suspended FROM responses r JOIN people p ON p.id=r.person
     WHERE r.shift=? ORDER BY CASE r.status WHEN 'assigned' THEN 0 WHEN 'interested' THEN 1 ELSE 2 END, p.name`).all(shift.id);
   const questions = JSON.parse(shift.questions);
   const requirements = JSON.parse(shift.requirements);
-  const isUpcoming = shift.starts > new Date().toISOString();
+  const isUpcoming = shift.starts > new Date().toISOString() && !shift.cancelled_at;
   const invitations = staff.filter(person => person.status === "active" && !person.access_suspended);
   const invitationNames = db.prepare(`SELECT p.name FROM invitations i JOIN people p ON p.id=i.person
     WHERE i.shift=? ORDER BY p.name`).all(shift.id);
   return `<div class="shift" id="shift-${shift.id}"><h3>${esc(shift.title)}</h3>
-    <p>${status(shift.visibility)}</p>${shiftFacts(shift, timezone)}
+    ${alert(failure?.message)}<p>${status(shift.cancelled_at ? "cancelled" : shift.visibility)}</p>${shiftFacts(shift, timezone)}
     ${requirements.length ? `<p>${requirements.map(r => esc(r.name) + (r.timing === "apply" ? " (vor Bewerbung)" : " (vor Einteilung)")).join(" · ")}</p>` : ""}
     ${isUpcoming && shift.visibility === "draft" ? post("/dispo/sichtbarkeit", hidden("shift", shift.id)
       + label("Veröffentlichen für", '<select name="visibility"><option value="pool">Aktiver Pool</option><option value="invite">Nur eingeladene Personen</option></select>')
       + button("Schicht veröffentlichen")) : ""}
     ${shift.visibility === "invite" && invitationNames.length ? `<p>Eingeladen: ${esc(invitationNames.map(row => row.name).join(", "))}</p>` : ""}
+    ${isUpcoming ? withdrawShiftControl(shift) : ""}
     ${isUpcoming && shift.visibility === "invite" && invitations.length ? `<div class="secondary">
       <button type="button" data-open-dialog="invite-${shift.id}">Poolmitglied einladen</button></div>
       <dialog id="invite-${shift.id}" aria-labelledby="invite-title-${shift.id}">
@@ -233,13 +233,14 @@ function planningShift(db, shift, staff, timezone) {
     ${responses.length ? `<ul class="items">${responses.map(response => {
       const missing = missingQualifications(db, shift, response.person, "assign", timezone);
       const answers = JSON.parse(response.answers);
-      return `<li><strong>${esc(response.name)}</strong> ${status(response.status)}
+      return `<li><strong>${esc(response.name)}</strong> ${status(response.released_by_dispo ? "released" : response.status)}
       ${response.status === "assigned" && isUpcoming && response.access_suspended ? '<p>Zugang gesperrt. Besetzung prüfen.</p>' : ""}
       ${answers.length ? `<dl>${answers.map((answer, index) => `<dt>${esc(questions[index])}</dt><dd>${esc(answer)}</dd>`).join("")}</dl>` : ""}
       ${response.status === "interested" && missing.length ? `<p>Fehlende Nachweise: ${esc(missing.join(", "))}</p>` : ""}
       ${response.status === "interested" && isUpcoming && !response.access_suspended && !missing.length && shift.filled < shift.slots
         ? post("/dispo/einteilen", hidden("shift", shift.id) + hidden("person", response.person)
-          + hidden("revision", response.revision) + button("Besetzung bestätigen")) : ""}</li>`;
+          + hidden("revision", response.revision) + button("Besetzung bestätigen")) : ""}
+      ${isUpcoming && response.status === "assigned" ? releasePlaceControl(shift, response) : ""}</li>`;
     }).join("")}</ul>` : empty("Noch keine Rückmeldungen.")}</div>`;
 }
 
@@ -273,7 +274,9 @@ function adminHome(db, user, timezone, failure) {
     ${label("Treffpunkt und Hinweise für eingeteiltes Personal", textarea("instructions", 2000, values?.get("instructions")))}
     ${button("Einsatz anlegen")}`);
   return page(user, "Disposition", `<p class="eyebrow">Disposition</p><h1>Personal und Einsätze</h1>
-    ${failure?.event ? `<p><a href="#event-${failure.event}">Zum Schichtformular mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.event ? `<p><a href="#event-${failure.event}">${failure.type === "correction"
+      ? "Zur Korrektur" : "Zum Schichtformular"} mit der Fehlermeldung</a></p>` : ""}
+    ${failure?.shift ? `<p><a href="#shift-${failure.shift}">Zur Schicht mit der Fehlermeldung</a></p>` : ""}
     ${failure?.person ? `<p><a href="#person-${failure.person}">Zum Personalprofil mit der Fehlermeldung</a></p>` : ""}
     ${eventFailure ? '<p><a href="#neuer-einsatz">Zum Einsatzformular mit der Fehlermeldung</a></p>' : ""}
     <div class="overview"><div><span class="muted">Bewerbungen in Prüfung</span><strong>${staff.filter(p => p.status === "pending").length}</strong></div>
@@ -284,12 +287,28 @@ function adminHome(db, user, timezone, failure) {
     + box("Einsätze", `<details id="neuer-einsatz" ${!events.length || eventFailure ? "open" : ""}><summary>Einsatz anlegen</summary>${eventForm}</details>
       ${events.map(event => `<article id="event-${event.id}"><h3>${esc(event.title)}</h3><p class="muted">
       ${esc(event.location)}${event.reference ? " · " + esc(event.reference) : ""}</p>
-      ${shiftForm(event, timezone, failure?.event === event.id ? failure : undefined)}
-      ${shifts.filter(shift => shift.event === event.id).map(shift => planningShift(db, shift, staff, timezone)).join("")}</article>`).join("")}`, "einsaetze"));
+      ${correctionForm(event, shifts.filter(shift => shift.event === event.id && !shift.cancelled_at && shift.starts > new Date().toISOString())
+        .map(shift => `${shift.title} · ${date(shift.starts, timezone)}`),
+        failure?.type === "correction" && failure.event === event.id ? failure : undefined)}
+      ${shiftForm(event, timezone, failure?.event === event.id && failure.type !== "correction" ? failure : undefined)}
+      ${shifts.filter(shift => shift.event === event.id).map(shift => planningShift(db, shift, staff, timezone,
+        failure?.shift === shift.id ? failure : undefined)).join("")}</article>`).join("")}`, "einsaetze"));
 }
 
 export function render(db, user, timezone, path, message, failure, registrationOpen = true) {
   if (message && failure?.form) {
+    if (user?.role === "admin" && failure.path === "/dispo/einsatz-korrigieren") {
+      const event = Number(failure.form.get("event"));
+      if (Number.isSafeInteger(event) && db.prepare("SELECT 1 FROM events WHERE id=?").get(event)) {
+        return adminHome(db, user, timezone, { type: "correction", event, form: failure.form, message });
+      }
+    }
+    if (user?.role === "admin" && ["/dispo/schicht-zuruecknehmen", "/dispo/platz-freigeben"].includes(failure.path)) {
+      const shift = Number(failure.form.get("shift"));
+      if (Number.isSafeInteger(shift) && db.prepare("SELECT 1 FROM shifts WHERE id=?").get(shift)) {
+        return adminHome(db, user, timezone, { shift, message });
+      }
+    }
     if (user?.role === "admin" && failure.path === "/dispo/kontozugang") {
       const person = Number(failure.form.get("person"));
       if (Number.isSafeInteger(person) && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff'").get(person)) {
