@@ -60,11 +60,12 @@ test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält histor
   assert.equal(call("export", "unknown@example.test", unknown).status, 1);
   assert.equal(existsSync(unknown), false);
 
-  const erase = () => call("erase", mira, mira);
+  const erase = () => call("erase", mira, "3");
   const counts = tables => tables.map(table => db.prepare(`SELECT count(*) AS n FROM ${table} WHERE person=3`).get().n);
   const tables = ["responses", "sessions", "qualifications", "invitations", "qualification_requests"];
-  assert.equal(call("erase", mira, "leni@example.test").status, 1);
-  assert.equal(call("erase", "dispo@example.test", "dispo@example.test").status, 1);
+  assert.match(call("inspect", mira).stdout, /Profil-ID: 3/);
+  assert.equal(call("erase", mira, "2").status, 1);
+  assert.equal(call("erase", "dispo@example.test", "1").status, 1);
   const preflight = erase();
   assert.equal(preflight.status, 1);
   assert.match(preflight.stderr, /Schicht #2.*Schicht #3/);
@@ -87,8 +88,13 @@ test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält histor
   assert.equal(erase().status, 0);
   assert.equal(db.prepare(shiftQuery + " WHERE s.id=1").get().filled, 2);
   assert.equal(db.prepare("SELECT count(*) AS n FROM sessions WHERE person=2").get().n, 1);
-  assert.equal(call("erase", "noa@example.test", "noa@example.test").status, 0);
+  assert.equal(call("erase", "noa@example.test", "4").status, 0);
   assert.equal(db.prepare(`SELECT ${nextPersonId} AS person,${nextQualificationId} AS qualification`).get().person, 5);
   assert.equal(db.prepare(`SELECT ${nextQualificationId} AS qualification`).get().qualification, 20);
   assert.equal(db.prepare("SELECT count(*) AS n FROM people WHERE role='staff'").get().n, 1);
+  person.run(5, mira, "Neues Profil", "neu-hash", "staff", "pending", "");
+  const staleErase = erase();
+  assert.equal(staleErase.status, 1);
+  assert.match(staleErase.stderr, /Profil-ID stimmt nicht/);
+  assert.equal(db.prepare("SELECT name FROM people WHERE id=5").get().name, "Neues Profil");
 });
