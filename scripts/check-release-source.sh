@@ -34,6 +34,7 @@ test -f CHANGELOG.md
 test -f docs/installation.md
 
 crew_password=$(node -e 'console.log(require("node:crypto").randomBytes(24).toString("hex"))')
+export CREW_DB="$workspace/crew.sqlite"
 CREW_ADMIN_PASSWORD="$crew_password" npm run admin -- dispo@example.test "Crew Dispo"
 crew_port=${CREW_SMOKE_PORT:-42688}
 crew_origin="http://127.0.0.1:$crew_port"
