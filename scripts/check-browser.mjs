@@ -178,7 +178,26 @@ try {
   await staff.getByLabel("Passwort").fill(password);
   await staff.getByRole("button", { name: "Anmelden", exact: true }).click();
   await staff.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
-  console.log("Browser: Kernablauf, Absagedialog, Kontosperre und Wiederfreigabe geprüft.");
+
+  const pausedApp = createApp({ db, origin, registrationOpen: false });
+  pausedApp.listen(0, "127.0.0.1");
+  await once(pausedApp, "listening");
+  try {
+    const pausedPortal = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
+    await pausedPortal.goto(`http://127.0.0.1:${pausedApp.address().port}/registrieren`);
+    await pausedPortal.getByText("Die Selbstregistrierung ist derzeit pausiert.", { exact: true }).waitFor();
+    assert.equal(await pausedPortal.getByRole("link", { name: "Registrieren", exact: true }).count(), 0);
+    await show(pausedPortal, "registrierung-pausiert-hell", false);
+    await pausedPortal.emulateMedia({ colorScheme: "dark" });
+    await show(pausedPortal, "registrierung-pausiert-dunkel", false);
+    await pausedPortal.setViewportSize({ width: 390, height: 844 });
+    await show(pausedPortal, "registrierung-pausiert-handy", false);
+    await pausedPortal.close();
+  } finally {
+    pausedApp.close();
+    await once(pausedApp, "close");
+  }
+  console.log("Browser: Kernablauf, Absagedialog, Kontosperre und pausierte Registrierung geprüft.");
 } finally {
   await browser.close();
   app.close();
