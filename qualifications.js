@@ -1,9 +1,15 @@
 import { nextQualificationId, requireInput, transaction } from "./model.js";
 
+function requireQualificationPlace(db, person, name, message) {
+  const { count, existing } = db.prepare(`SELECT count(*) AS count,count(*) FILTER (WHERE name=?) AS existing FROM (
+    SELECT name FROM qualifications WHERE person=?
+    UNION SELECT name FROM qualification_requests WHERE person=? AND state='open'
+  )`).get(name, person, person);
+  requireInput(existing || count < 30, message);
+}
+
 export function submitQualification(db, person, name, validUntil, evidence) {
-  const { count } = db.prepare("SELECT count(*) AS count FROM qualifications WHERE person=?").get(person);
-  const existing = db.prepare("SELECT 1 FROM qualifications WHERE person=? AND name=?").get(person, name);
-  requireInput(existing || count < 30, "Du hast bereits 30 Qualifikationen erfasst.");
+  requireQualificationPlace(db, person, name, "Alle 30 Plätze für Qualifikationen sind belegt oder durch Nachforderungen reserviert.");
   db.prepare(`INSERT INTO qualifications (id,person,name,valid_until,evidence) VALUES (${nextQualificationId},?,?,?,?)
     ON CONFLICT(person,name) DO UPDATE SET valid_until=excluded.valid_until, evidence=excluded.evidence,
       verified=0, revision=qualifications.revision+1`).run(person, name, validUntil, evidence);
@@ -25,6 +31,7 @@ export function requestQualification(db, person, name, note) {
   transaction(db, () => {
     requireInput(db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff' AND status='active' AND access_suspended=0").get(person),
       "Eine Nachforderung benötigt ein aktives Poolmitglied.");
+    requireQualificationPlace(db, person, name, "Alle 30 Plätze dieses Poolprofils sind belegt oder durch Nachforderungen reserviert.");
     const change = db.prepare(`INSERT INTO qualification_requests (person,name,note,state) VALUES (?,?,?,'open')
       ON CONFLICT(person,name) DO UPDATE SET note=excluded.note,state='open' WHERE qualification_requests.state='done'`)
       .run(person, name, note);
