@@ -45,6 +45,8 @@ jobs:
           path: build/screenshots/*.png
       - name: Container bauen
         run: docker build -t crew-ci .
+      - name: Sicherung und Wiederherstellung prüfen
+        run: node scripts/check-restore.mjs
       - name: Quellpaket prüfen
         run: |
           set -euo pipefail

@@ -3,10 +3,14 @@ import { normalizeEmail, openDatabase, passwordHash, requireInput, resetPassword
 try {
   const [, , command = "", argument] = process.argv;
   const password = process.env.CREW_ADMIN_PASSWORD ?? "";
-  verifyPasswordLength(password);
-  const db = openDatabase();
+  const clearSessions = command === "invalidate-sessions";
+  if (!clearSessions) verifyPasswordLength(password);
+  const db = openDatabase(undefined, { initialize: !clearSessions && command !== "reset-password" });
   try {
-    if (command === "reset-password") {
+    if (clearSessions) {
+      db.exec("DELETE FROM sessions");
+      console.log("Alle Crew-Sitzungen sind ungültig.");
+    } else if (command === "reset-password") {
       resetPassword(db, normalizeEmail(argument ?? ""), password);
       console.log("Passwort geändert. Frühere Sitzungen sind ungültig.");
     } else {
