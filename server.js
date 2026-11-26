@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
   assign, canSee, checkPassword, InputError, normalizeEmail, openDatabase, passwordHash,
-  qualificationName, requireInput, respond, sessionHash, transaction, verifyPasswordLength,
+  qualificationName, requireInput, respond, sessionHash, transaction, updatePoolAccess, verifyPasswordLength,
 } from "./model.js";
 import { render, renderEvidence, renderShift } from "./views.js";
 
@@ -97,18 +97,20 @@ const redirect = (res, url) => res.writeHead(303, { Location: url }).end();
 function findUser(db, token) {
   if (!token) return undefined;
   return db.prepare(`SELECT p.* FROM sessions s JOIN people p ON p.id=s.person
-    WHERE s.token=? AND s.expires>?`).get(sessionHash(token), Date.now());
+    WHERE s.token=? AND s.expires>? AND p.access_suspended=0`).get(sessionHash(token), Date.now());
 }
 
 function cookie(res, token, secure) {
   res.setHeader("Set-Cookie", `crew_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${token ? lifetime : 0}${secure ? "; Secure" : ""}`);
 }
 
-function saveSession(db, res, person, token, secure) {
+function saveSession(db, res, { id, secret }, token, secure) {
   const nextToken = randomBytes(32).toString("hex");
   transaction(db, () => {
+    const current = db.prepare("SELECT secret,access_suspended FROM people WHERE id=?").get(id);
+    requireInput(current?.secret === secret && !current.access_suspended, "E-Mail-Adresse oder Passwort stimmt nicht.");
     db.prepare("DELETE FROM sessions WHERE expires<=? OR token=?").run(Date.now(), sessionHash(token ?? ""));
-    db.prepare("INSERT INTO sessions VALUES (?,?,?)").run(sessionHash(nextToken), person, Date.now() + lifetime * 1000);
+    db.prepare("INSERT INTO sessions VALUES (?,?,?)").run(sessionHash(nextToken), id, Date.now() + lifetime * 1000);
   });
   cookie(res, nextToken, secure);
 }
@@ -122,17 +124,18 @@ function submitAccount({ db, req, res, token, path, form, secure, limit }) {
     verifyPasswordLength(password);
     const name = field(form, "name", 100);
     const availability = field(form, "availability", 1000, false);
+    const secret = passwordHash(password);
     const result = db.prepare(`INSERT INTO people (email,name,secret,role,status,availability)
-      VALUES (?,?,?,'staff','pending',?) ON CONFLICT(email) DO NOTHING`).run(email, name, passwordHash(password), availability);
+      VALUES (?,?,?,'staff','pending',?) ON CONFLICT(email) DO NOTHING`).run(email, name, secret, availability);
     requireInput(result.changes === 1, "Registrierung nicht möglich. Wenn du bereits ein Konto hast, melde dich an.");
-    saveSession(db, res, result.lastInsertRowid, token, secure);
+    saveSession(db, res, { id: result.lastInsertRowid, secret }, token, secure);
     clearAccountLimit();
     return "/";
   }
   const person = db.prepare("SELECT * FROM people WHERE email=?").get(email);
   const valid = checkPassword(password, person?.secret ?? dummyPassword);
-  requireInput(person && valid, "E-Mail-Adresse oder Passwort stimmt nicht.");
-  saveSession(db, res, person.id, token, secure);
+  requireInput(person && valid && !person.access_suspended, "E-Mail-Adresse oder Passwort stimmt nicht.");
+  saveSession(db, res, person, token, secure);
   clearAccountLimit();
   return homeFor(person);
 }
@@ -195,6 +198,13 @@ async function submitStaff({ db, user, token, path, form, timezone }) {
 }
 
 function submitPlanning({ db, path, form, timezone }) {
+  if (path === "/dispo/kontozugang") {
+    const action = field(form, "action", 10);
+    requireInput(action === "suspend" || action === "resume", "Kontozugang prüfen.");
+    const person = id(form, "person");
+    updatePoolAccess(db, person, id(form, "revision"), action === "suspend" ? 1 : 0);
+    return `/dispo#person-${person}`;
+  }
   if (path === "/dispo/freigabe") {
     const status = field(form, "status", 10);
     requireInput(["active", "rejected", "pending"].includes(status), "Ungültiger Bewerbungsstatus.");
@@ -251,7 +261,7 @@ function submitPlanning({ db, path, form, timezone }) {
     } else if (path === "/dispo/einladen") {
       const person = id(form, "person");
       requireInput(shift.visibility === "invite" && shift.starts > new Date().toISOString()
-        && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff' AND status='active'").get(person),
+        && db.prepare("SELECT 1 FROM people WHERE id=? AND role='staff' AND status='active' AND access_suspended=0").get(person),
       "Eine Einladung benötigt eine offene Einladungsschicht und ein aktives Poolmitglied.");
       db.prepare("INSERT OR IGNORE INTO invitations VALUES (?,?)").run(shift.id, person);
     } else {

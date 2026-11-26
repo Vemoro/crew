@@ -27,6 +27,19 @@ npm start
 
 Setze `CREW_ADMIN_PASSWORD` vor der Kontoanlage wie oben beschrieben. Die Beispiele verwenden eine POSIX-Shell. In PowerShell entfernst du die Variable mit `Remove-Item Env:CREW_ADMIN_PASSWORD`. Standardmäßig liegt der Datenbestand unter `data/crew.sqlite`. `CREW_DB` legt einen anderen Datenbankpfad fest. `npm test` prüft den HTTP-Ablauf in einer isolierten In-Memory-Datenbank.
 
+## Zugang sperren oder wiederherstellen
+
+Die Dispo öffnet das Profil eines aktiven Poolmitglieds und kann den Zugang dort sperren oder wieder freigeben. Eine Sperre beendet bestehende Sitzungen. Bevorstehende bestätigte Schichten bleiben reserviert und zeigen der Dispo den Prüfbedarf. Nach der Wiederfreigabe meldet sich die Person neu an.
+
+Betreiber mit Zugriff auf Crew und dessen Datenbank können ein verlorenes Passwort ersetzen. Setze `CREW_ADMIN_PASSWORD` für den Befehl auf das neue Passwort und entferne die Variable anschließend aus der Shell.
+
+```sh
+docker compose run --rm -e CREW_ADMIN_PASSWORD crew node admin.js reset-password personal@example.test
+unset CREW_ADMIN_PASSWORD
+```
+
+Beim nativen Start verwende mit demselben Datenbankpfad `npm run admin -- reset-password personal@example.test`. Ein Passwortwechsel beendet die bestehenden Sitzungen. Wirksame Kontosperren bleiben bestehen.
+
 ## Adresse und Zeitzone
 
 Der Dienst bindet lokal an `127.0.0.1:8080`. Setze `PORT` beim nativen Start oder `CREW_PORT` für Compose, wenn ein anderer Host-Port benötigt wird. Setze auch `CREW_ORIGIN` auf die im Browser verwendete Adresse. Verwende bei einem HTTPS-Reverse-Proxy dessen öffentliche HTTPS-Origin, damit Crew sichere Sitzungscookies ausgibt. In Compose kannst du die Werte in der Shell oder einer lokalen `.env` konfigurieren. Bei einem Proxy außerhalb des Compose-Netzwerks gilt die freigegebene Loopback-Adresse als Upstream auf demselben Host.

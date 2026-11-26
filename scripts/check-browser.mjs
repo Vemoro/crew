@@ -151,7 +151,34 @@ try {
   await confirmCancellation.click();
   await staffMobile.getByText("Zurückgezogen", { exact: true }).waitFor();
   assert.match(await staffMobile.locator(".overview").innerText(), /0,00\s€/);
-  console.log("Browser: Bewerbung, Tastatur, Einladung, Pflichtfrage, Besetzung, Vergütung und Absagedialog geprüft. Sieben Ansichten gespeichert.");
+  await admin.reload();
+  await admin.locator("#person-2 summary").click();
+  const suspend = admin.getByRole("button", { name: "Zugang sperren", exact: true });
+  await suspend.click();
+  const suspendDialog = admin.getByRole("dialog", { name: "Zugang sperren?" });
+  assert.equal(await suspendDialog.getByRole("button", { name: "Abbrechen" })
+    .evaluate(field => document.activeElement === field), true);
+  await admin.keyboard.press("Escape");
+  assert.equal(await suspend.evaluate(field => document.activeElement === field), true);
+  await suspend.click();
+  await show(admin, "kontosperre-dunkel", false);
+  await admin.emulateMedia({ colorScheme: "light" });
+  await show(admin, "kontosperre-hell", false);
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await show(admin, "kontosperre-handy", false);
+  await suspendDialog.getByRole("button", { name: "Sperre bestätigen" }).click();
+  await admin.getByText("Zugang gesperrt", { exact: true }).waitFor();
+  await staff.goto(origin);
+  await staff.getByRole("heading", { name: "Bei Crew anmelden" }).waitFor();
+  await admin.locator("#person-2 summary").click();
+  await admin.getByRole("button", { name: "Zugang wieder freigeben" }).click();
+  await admin.getByRole("dialog", { name: "Zugang wieder freigeben?" })
+    .getByRole("button", { name: "Zugang freigeben" }).click();
+  await staff.getByLabel("E-Mail-Adresse").fill("mira@example.test");
+  await staff.getByLabel("Passwort").fill(password);
+  await staff.getByRole("button", { name: "Anmelden", exact: true }).click();
+  await staff.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
+  console.log("Browser: Kernablauf, Absagedialog, Kontosperre und Wiederfreigabe geprüft.");
 } finally {
   await browser.close();
   app.close();
