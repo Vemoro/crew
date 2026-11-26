@@ -4,7 +4,7 @@ Die öffentliche Versionsnummer lautet 0.1.0.0 und steht als `crewVersion` in `p
 
 ## Vorbereitung im privaten Repository
 
-Der manuell gestartete Workflow **Privates Quellpaket prüfen** baut auf dem gewählten Commit von `main` ein Archiv und prüft dessen SHA-256. Er startet Crew aus dem entpackten Inhalt und prüft die Kontoanlage und Anmeldung mit synthetischen Angaben. Das private Workflow-Artefakt enthält das Archiv und `SHA256SUMS`.
+Der manuell gestartete Workflow **Privates Quellpaket prüfen** baut ein Archiv vom beim Start aktuellen Commit auf `main` und prüft dessen SHA-256. Er startet Crew aus dem entpackten Inhalt und prüft die Kontoanlage und Anmeldung mit synthetischen Angaben. Das private Workflow-Artefakt enthält das Archiv und `SHA256SUMS`. Prüfe die Commit-ID des Laufs gegen den vorgesehenen Kandidaten.
 
 In einem Checkout lässt sich das Paket auch mit Python 3.11 oder neuer erzeugen. Ersetze den Parameter `<vollständige-commit-id>` durch den Kandidatencommit.
 
