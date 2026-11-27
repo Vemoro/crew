@@ -1,3 +1,5 @@
+import type { Page } from "playwright";
+import type { ShowScreenshot } from "./check-browser";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
@@ -15,7 +17,7 @@ function fixturePdf() {
   return Buffer.from(source);
 }
 
-export async function checkEvidence(staff, show) {
+export async function checkEvidence(staff: Page, show: ShowScreenshot) {
   const submit = staff.getByRole("button", { name: "Qualifikation einreichen" });
   const name = staff.getByLabel("Bezeichnung", { exact: true });
   const file = staff.locator('.file-picker input[type="file"]');
@@ -39,8 +41,8 @@ export async function checkEvidence(staff, show) {
   await staff.getByText("Erlaubt sind PDF-Dateien bis 2 MB.", { exact: true }).waitFor();
   assert.equal(await choose.getAttribute("aria-invalid"), "true");
   assert.equal(await choose.evaluate(node => node === document.activeElement), true);
-  assert.match(await choose.evaluate(node => node.getAttribute("aria-describedby").split(" ")
-    .map(id => document.getElementById(id).textContent).join(" ")), /Erlaubt sind PDF-Dateien bis 2 MB\./);
+  assert.match(await choose.evaluate(node => (node.getAttribute("aria-describedby") ?? "").split(" ")
+    .map(id => document.getElementById(id)?.textContent).join(" ")), /Erlaubt sind PDF-Dateien bis 2 MB\./);
   assert.equal(await name.inputValue(), "Ungültige Browserdatei");
   await show(staff, "pdf-formatfehler");
   await name.fill("Browsertest Nachweis");

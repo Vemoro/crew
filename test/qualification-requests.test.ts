@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { submitQualification } from "../src/server/qualifications.ts";
-import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
+import { submitQualification } from "../src/server/qualifications";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson, encodeForm, type FormFields } from "./runtime";
 
 test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehende Zusagen zur Prüfung", async t => {
   const database = await createTestDatabase();
@@ -13,7 +13,7 @@ test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehen
   await seedPerson(db, "leni@example.test", "Leni", password);
   await db.query(`INSERT INTO qualifications (id,person,name,verified,evidence) VALUES (1,2,'funk',1,decode('255044462D','hex'));
     INSERT INTO events (id,title,location) VALUES (1,'Stadtfest','Halle');`);
-  const create = (id,title,requirements) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
+  const create = (id: number, title: string, requirements: string) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
     VALUES ($1,1,$2,'2099-01-01T10:00:00.000Z','2099-01-01T12:00:00.000Z',3,8000,$3,'[]','pool')`, [id,title,requirements]);
   await create(1, "Bestätigte Schicht", JSON.stringify([{ name: "funk", timing: "assign" }]));
   await create(2, "Nur mit geprüfter Bewerbung", JSON.stringify([{ name: "funk", timing: "apply" }]));
@@ -23,14 +23,14 @@ test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehen
   const base = origin;
   const server = await startTestServer(database.url, origin);
   t.after(() => stopTestServer(server));
-  async function visit(path, cookie, data, expected = 200) {
+  async function visit(path: string, cookie: string | undefined, data?: FormFields, expected = 200) {
     const response = await fetch(base + path, { method: data ? "POST" : "GET", redirect: "manual",
-      headers: { origin, ...(cookie ? { Cookie: cookie } : {}) }, body: data && new URLSearchParams(data) });
+      headers: { origin, ...(cookie ? { Cookie: cookie } : {}) }, body: data && encodeForm(data) });
     const html = await response.text();
     assert.equal(response.status, expected, html);
     return { html, cookie: response.headers.get("set-cookie")?.split(";")[0] };
   }
-  const login = async email => (await visit("/anmelden", "", { email, password }, 303)).cookie;
+  const login = async (email: string) => (await visit("/anmelden", "", { email, password }, 303)).cookie;
   const admin = await login("dispo@example.test");
   const mira = await login("mira@example.test");
   const other = await login("leni@example.test");

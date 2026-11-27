@@ -3,6 +3,18 @@ import { createPool, type Query } from '../src/server/db';
 import { createPerson, type Role } from '../src/server/auth';
 import { migrate } from '../src/server/schema';
 
+export type FormFields = Record<string, string | number>;
+
+export interface FormRequest {
+  cookie?: string;
+  data?: FormFields;
+  expected?: number;
+}
+
+export function encodeForm(fields: FormFields) {
+  return new URLSearchParams(Object.entries(fields).map(([key, value]) => [key, String(value)]));
+}
+
 export async function seedPerson(db: Query, email: string, name: string, password: string, role: Role = 'staff') {
   const person = await createPerson(db, email, name, await Bun.password.hash(password), role);
   await db.query("UPDATE people SET status='active' WHERE id=$1", [person.id]);

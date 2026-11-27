@@ -4,7 +4,7 @@ import ts from "typescript";
 
 const paths = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { encoding: "utf8" });
 const source = /\.(?:[cm]?[jt]sx?|css)$/;
-const tests = /^(?:test|tests)\/|\.(?:test|spec)\.[^.]+$|^scripts\/check-browser\.mjs$/;
+const tests = /^(?:test|tests)\/|\.(?:test|spec)\.[^.]+$|^scripts\/check-browser\.ts$/;
 const spacingProperties = /(?:^|(?<=[{};]))\s*((?:padding|margin)(?:-[a-z-]+)?|gap|row-gap|column-gap)\s*:\s*([^;{}]+)/gi;
 const pixels = /(?<![\w.-])([+-]?(?:\d*\.\d+|\d+)(?:e[+-]?\d+)?)px\b/gi;
 const commentsAndStrings = /\/\*[\s\S]*?\*\/|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'/g;
@@ -18,12 +18,12 @@ const nonCodeTokens = new Set([
   ts.SyntaxKind.TemplateMiddle, ts.SyntaxKind.TemplateTail,
 ]);
 
-function checkFunctions(path, content) {
+function checkFunctions(path: string, content: string) {
   const file = ts.createSourceFile(path, content, ts.ScriptTarget.Latest, true);
-  function visit(node) {
-    if (ts.isFunctionLike(node) && node.body) {
+  function visit(node: ts.Node) {
+    if (ts.isFunctionLike(node) && "body" in node && node.body) {
       const lines = new Set();
-      function count(part) {
+      function count(part: ts.Node) {
         if (ts.isJSDoc(part)) return;
         const children = part.getChildren(file);
         if (children.length) children.forEach(count);

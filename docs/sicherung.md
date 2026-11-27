@@ -34,6 +34,6 @@ docker compose -p crew-restore up -d crew
 
 Für einen nativen Restore verwende `psql` mit denselben Optionen und der Verbindungsadresse der leeren Zieldatenbank. Beende alle aus dem Dump übernommenen Sitzungen mit `bun run admin invalidate-sessions`, bevor der Webdienst erreichbar wird. Prüfe die Anmeldung, Planung und stichprobenartig PDF-Nachweise. Führe zwischen Sicherung und Wiederanlauf erfolgte Profilbereinigungen erneut aus. [Profilbereinigung](personendaten.md)
 
-`bun scripts/check-restore.mjs` erzeugt in der CI und lokal synthetische Daten in getrennten Compose-Projekten. Die Probe prüft einen beschädigten Dump, den Wiederanlauf und den Sitzungswiderruf. Sie entfernt danach die Container und Volumes der Prüfprojekte.
+`bun scripts/check-restore.ts` erzeugt in der CI und lokal synthetische Daten in getrennten Compose-Projekten. Die Probe prüft einen beschädigten Dump, den Wiederanlauf und den Sitzungswiderruf. Sie entfernt danach die Container und Volumes der Prüfprojekte.
 
 Für die Rückkehr zum letzten SQLite-Stand benötigst du dessen Anwendung sowie eine separate Kopie der Vorupdate-Sicherung. [Wechsel von SQLite zu PostgreSQL](migration.md#freigabe-und-rückweg)

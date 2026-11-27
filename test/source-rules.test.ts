@@ -10,9 +10,9 @@ test("Codegröße und Abstandsraster unterscheiden Grenzwerte von gültigen Ausn
   const cwd = mkdtempSync(join(tmpdir(), "crew-source-check-"));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   execFileSync("git", ["init", "--quiet"], { cwd });
-  const check = fileURLToPath(new URL("../scripts/check-source.mjs", import.meta.url));
+  const check = fileURLToPath(new URL("../scripts/check-source.ts", import.meta.url));
   const run = () => spawnSync(process.execPath, [check], { cwd, encoding: "utf8" });
-  const write = (path, content) => writeFileSync(join(cwd, path), content);
+  const write = (path: string, content: string) => writeFileSync(join(cwd, path), content);
   write("source.js", "// eine Zeile\n".repeat(400));
   write("funktion.ts", `function demo() {\n${"void 0;\n".repeat(80)}${"// Kommentar\n".repeat(10)}}\n`);
   write("form.css", `main { gap: 8px; border: 1px solid; margin: auto } /* padding: 3px */
@@ -46,9 +46,9 @@ test("Der Rastercheck erfasst Deklarationen nach verschachtelten CSS-Blöcken", 
   const cwd = mkdtempSync(join(tmpdir(), "crew-nested-css-check-"));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   execFileSync("git", ["init", "--quiet"], { cwd });
-  const check = fileURLToPath(new URL("../scripts/check-source.mjs", import.meta.url));
+  const check = fileURLToPath(new URL("../scripts/check-source.ts", import.meta.url));
   const path = join(cwd, "nested.css");
-  const stylesheet = gap => `main {
+  const stylesheet = (gap: number) => `main {
     display: grid;
     @media (min-width: 1px) { color: red; }
     gap: ${gap}px;

@@ -1,6 +1,8 @@
+import type { Browser, BrowserContext, Locator, Page } from "playwright";
+import type { ShowScreenshot } from "./check-browser";
 import assert from "node:assert/strict";
 
-export async function checkMobilePlanning(browser, planning, origin, show, engine) {
+export async function checkMobilePlanning(browser: Browser, planning: BrowserContext, origin: string, show: ShowScreenshot, engine: string) {
   const context = await browser.newContext({ viewport: { width: 360, height: 800 }, colorScheme: "light", isMobile: true,
     deviceScaleFactor: 1, hasTouch: true, locale: "de-DE" });
   try {
@@ -8,7 +10,7 @@ export async function checkMobilePlanning(browser, planning, origin, show, engin
     const page = await context.newPage();
     for (const width of [360, 390]) {
       await page.setViewportSize({ width, height: 844 });
-      for (const theme of ["light", "dark"]) {
+      for (const theme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme: theme });
         await page.goto(origin + "/dispo");
         const heading = page.getByRole("heading", { name: "Personal und Einsätze" });
@@ -55,20 +57,20 @@ export async function checkMobilePlanning(browser, planning, origin, show, engin
   }
 }
 
-async function checkWidth(page, width) {
+async function checkWidth(page: Page, width: number) {
   const widths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
   assert.equal(widths.viewport, width, "Die Dispo nutzt den erwarteten mobilen Layout-Viewport.");
   assert.ok(widths.content <= width, `Dispo-Inhalt ist ${widths.content}px breit bei ${width}px Platz.`);
 }
 
-async function checkTouchTargets(controls) {
+async function checkTouchTargets(controls: Locator) {
   for (const control of await controls.all()) {
     const box = await control.boundingBox();
-    assert.ok(box?.height >= 44 && box?.width >= 44, `Touch-Ziel zu klein: ${await control.evaluate(element => element.outerHTML)}`);
+    assert.ok(box && box.height >= 44 && box.width >= 44, `Touch-Ziel zu klein: ${await control.evaluate(element => element.outerHTML)}`);
   }
 }
 
-async function checkFocus(control) {
+async function checkFocus(control: Locator) {
   assert.equal(await control.evaluate(element => {
     const style = getComputedStyle(element);
     const outlineAlpha = style.outlineColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/)?.[1];
@@ -77,17 +79,17 @@ async function checkFocus(control) {
   }), true, "Tastaturfokus fehlt oder hat keinen sichtbaren Umriss.");
 }
 
-async function checkTextContrast(text) {
+async function checkTextContrast(text: Locator) {
   await text.waitFor();
   const contrast = await text.evaluate(element => {
-    const channels = value => value.match(/[\d.]+/g).map(Number);
-    const luminance = rgb => rgb.slice(0, 3).reduce((result, component, index) => {
+    const channels = (value: string) => (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = (rgb: number[]) => rgb.slice(0, 3).reduce((result, component, index) => {
       const srgb = component / 255;
       const linear = srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
       return result + linear * [0.2126, 0.7152, 0.0722][index];
     }, 0);
     const ink = luminance(channels(getComputedStyle(element).color));
-    for (let layer = element; layer; layer = layer.parentElement) {
+    for (let layer: Element | null = element; layer; layer = layer.parentElement) {
       const background = channels(getComputedStyle(layer).backgroundColor);
       if (background[3] === 0) continue;
       const surface = luminance(background);

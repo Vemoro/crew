@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { request as httpRequest } from "node:http";
+import { request as httpRequest, type IncomingHttpHeaders, type OutgoingHttpHeaders } from "node:http";
 import { createServer as createProxy, request as httpsRequest } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime";
 
 test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { timeout: 30_000 }, async t => {
   const folder = mkdtempSync(join(tmpdir(), "crew-proxy-test-"));
@@ -26,7 +26,7 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   const proxy = createProxy({ key: readFileSync(keyPath), cert }, (req, res) => {
     const forward = httpRequest({ hostname: "127.0.0.1", port: upstreamPort, path: req.url, method: req.method,
       headers: { ...req.headers, "x-forwarded-for": req.socket.remoteAddress } }, response => {
-      res.writeHead(response.statusCode, response.headers);
+      res.writeHead(response.statusCode ?? 502, response.headers);
       response.pipe(res);
     });
     forward.once("error", error => res.destroy(error));
@@ -34,15 +34,17 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   });
   proxy.listen(0, "127.0.0.1");
   await once(proxy, "listening");
-  t.after(() => new Promise(resolve => proxy.close(resolve)));
-  const origin = `https://127.0.0.1:${proxy.address().port}`;
+  t.after(() => new Promise<void>((resolve, reject) => proxy.close(error => error ? reject(error) : resolve())));
+  const address = proxy.address();
+  assert.ok(address && typeof address !== "string");
+  const origin = `https://127.0.0.1:${address.port}`;
   const crew = await startTestServer(database.url, origin, "paused", "127.0.0.1", upstreamPort);
   t.after(async () => {
     await stopTestServer(crew);
     await database.close();
   });
 
-  const browser = (path, options = {}) => send(httpsRequest, origin + path, { ca: cert, origin, ...options });
+  const browser = (path: string, options: Partial<SendOptions> = {}) => send(httpsRequest, origin + path, { ca: cert, origin, ...options });
   const paused = await browser("/registrieren");
   assert.equal(paused.status, 200);
   assert.match(paused.html, /Selbstregistrierung ist derzeit pausiert/);
@@ -55,6 +57,7 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   assert.equal(badOrigin.status, 422);
   const admin = await browser("/anmelden", { localAddress: "127.0.0.2", data: { email: "dispo@example.test", password } });
   assert.equal(admin.status, 303);
+  assert.ok(admin.headers["set-cookie"]?.length);
   assert.match(admin.headers["set-cookie"][0], /; Secure/);
   assert.equal(admin.headers["strict-transport-security"], "max-age=31536000");
   const adminPortal = await browser("/dispo", { cookie: admin.headers["set-cookie"][0].split(";")[0] });
@@ -68,6 +71,7 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   assert.match(rateLimited.html, /Zu viele Versuche/);
   const staff = await browser("/anmelden", { localAddress: "127.0.0.3", data: { email: "mira@example.test", password } });
   assert.equal(staff.status, 303);
+  assert.ok(staff.headers["set-cookie"]?.length);
   assert.match(staff.headers["set-cookie"][0], /; Secure/);
   const staffPortal = await browser("/", { cookie: staff.headers["set-cookie"][0].split(";")[0] });
   assert.match(staffPortal.html, /Hallo, Mira/);
@@ -79,13 +83,22 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   assert.equal(direct.status, 303, "Die fremde Forwarding-Angabe darf den bereits begrenzten Client nicht auswählen.");
 });
 
-function send(request, url, { ca, origin, localAddress, data, forwardedFor, cookie }) {
+interface SendOptions {
+  ca?: Buffer;
+  origin: string;
+  localAddress?: string;
+  data?: Record<string, string>;
+  forwardedFor?: string;
+  cookie?: string;
+}
+
+function send(request: typeof httpsRequest | typeof httpRequest, url: string, { ca, origin, localAddress, data, forwardedFor, cookie }: SendOptions) {
   const body = data ? new URLSearchParams(data).toString() : "";
-  const headers = body ? { Origin: origin, "Content-Type": "application/x-www-form-urlencoded",
+  const headers: OutgoingHttpHeaders = body ? { Origin: origin, "Content-Type": "application/x-www-form-urlencoded",
     "Content-Length": Buffer.byteLength(body) } : {};
   if (forwardedFor) headers["X-Forwarded-For"] = forwardedFor;
   if (cookie) headers.Cookie = cookie;
-  return new Promise((resolve, reject) => {
+  return new Promise<{ html: string; headers: IncomingHttpHeaders; status: number | undefined }>((resolve, reject) => {
     const req = request(url, { ca, localAddress, method: body ? "POST" : "GET", headers }, res => {
       res.setEncoding("utf8");
       let html = "";

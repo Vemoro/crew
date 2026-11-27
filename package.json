@@ -19,9 +19,9 @@
     "people": "bun src/cli/people.ts",
     "typecheck": "tsc --noEmit",
     "check:fields": "bun scripts/check-fields.ts",
-    "lint": "bun scripts/check-source.mjs && biome lint --diagnostic-level=info",
+    "lint": "bun scripts/check-source.ts && biome lint --diagnostic-level=info",
     "test": "bun test --timeout 30000 test",
-    "test:browser": "bun scripts/check-browser.mjs"
+    "test:browser": "bun scripts/check-browser.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.1",

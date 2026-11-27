@@ -13,24 +13,24 @@ const origin = "http://localhost:8080";
 const password = "synthetic-restore-password";
 const evidence = "%PDF-1.4\n% Crew synthetischer Nachweis\n%%EOF\n";
 const repository = fileURLToPath(new URL("../", import.meta.url));
-const composeArgs = (project, args) => ["compose", "-f", fileURLToPath(new URL("../compose.yaml", import.meta.url)), "-p", project, ...args];
+const composeArgs = (project: string, args: string[]) => ["compose", "-f", fileURLToPath(new URL("../compose.yaml", import.meta.url)), "-p", project, ...args];
 const composeOptions = {
   env: { ...process.env, CREW_PORT: "0", CREW_ORIGIN: origin, CREW_REGISTRATION: "open", CREW_TRUSTED_PROXY: "",
     CREW_DB_PASSWORD: "synthetic-restore-db-password", CREW_AUTH_SECRET: "synthetic-restore-auth-secret-for-tests" },
   cwd: repository,
-  encoding: "utf8",
+  encoding: "utf8" as const,
   windowsHide: true,
 };
-const compose = (project, args, input) => execFileSync("docker", composeArgs(project, args), {
+const compose = (project: string, args: string[], input?: string) => execFileSync("docker", composeArgs(project, args), {
   ...composeOptions, input, stdio: ["pipe", "pipe", "pipe"],
 }).trim();
-const maintenance = (project, ...args) => compose(project, ["run", "--rm", "-T", "crew", "bun", "run", "admin", ...args]);
-const sql = (project, input) => compose(project, ["exec", "-T", "postgres", "psql",
+const maintenance = (project: string, ...args: string[]) => compose(project, ["run", "--rm", "-T", "crew", "bun", "run", "admin", ...args]);
+const sql = (project: string, input: string) => compose(project, ["exec", "-T", "postgres", "psql",
   "-X", "-U", "crew", "-d", "crew", "--single-transaction", "-v", "ON_ERROR_STOP=1"], input);
-const dump = project => compose(project, ["exec", "-T", "postgres", "pg_dump", "-U", "crew", "--no-owner", "--no-acl", "crew"]);
-const database = project => compose(project, ["up", "-d", "--wait", "postgres"]);
+const dump = (project: string) => compose(project, ["exec", "-T", "postgres", "pg_dump", "-U", "crew", "--no-owner", "--no-acl", "crew"]);
+const database = (project: string) => compose(project, ["up", "-d", "--wait", "postgres"]);
 
-async function start(project) {
+async function start(project: string) {
   compose(project, ["up", "-d"]);
   const base = "http://" + compose(project, ["port", "crew", "8080"]).replace("\r", "");
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -48,14 +48,16 @@ async function start(project) {
   throw new Error("Crew wurde im Compose-Prüfprojekt nicht bereit.");
 }
 
-async function login(base, email) {
+async function login(base: string, email: string) {
   const result = await fetch(base + "/anmelden", { method: "POST", redirect: "manual", headers: { origin },
     body: new URLSearchParams({ email, password }) });
   assert.equal(result.status, 303);
-  return result.headers.get("set-cookie").split(";")[0];
+  const cookie = result.headers.get("set-cookie");
+  assert.ok(cookie);
+  return cookie.split(";")[0];
 }
 
-async function verify(base) {
+async function verify(base: string) {
   const admin = await login(base, "dispo@example.test");
   const staff = await login(base, "mira@example.test");
   const other = await login(base, "leni@example.test");

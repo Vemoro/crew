@@ -60,7 +60,7 @@ jobs:
       - name: Container bauen
         run: docker build -t crew-ci .
       - name: Sicherung und Wiederherstellung prüfen
-        run: bun scripts/check-restore.mjs
+        run: bun scripts/check-restore.ts
       - name: Quellpaket prüfen
         run: |
           set -euo pipefail

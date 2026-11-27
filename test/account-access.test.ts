@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { request as startRequest } from "node:http";
+import { request as startRequest, type ClientRequest } from "node:http";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson, encodeForm, type FormRequest } from "./runtime";
 
 test("Pool-Sperre und CLI-Passwortwiederherstellung widerrufen alte Sitzungen", async t => {
   const database = await createTestDatabase();
@@ -28,16 +28,16 @@ test("Pool-Sperre und CLI-Passwortwiederherstellung widerrufen alte Sitzungen", 
     await stopTestServer(server);
     await database.close();
   });
-  async function request(path, { cookie, data, expected = 200 } = {}) {
-    const headers = { Origin: origin };
+  async function request(path: string, { cookie, data, expected = 200 }: FormRequest = {}) {
+    const headers: Record<string, string> = { Origin: origin };
     if (cookie) headers.Cookie = cookie;
     const response = await fetch(base + path, { headers, method: data ? "POST" : "GET",
-      body: data && new URLSearchParams(data), redirect: "manual" });
+      body: data && encodeForm(data), redirect: "manual" });
     const html = await response.text();
     assert.equal(response.status, expected, `${path}: ${html}`);
     return { cookie: response.headers.get("set-cookie")?.split(";")[0], html };
   }
-  async function login(email, password, expected = 303) {
+  async function login(email: string, password: string, expected = 303) {
     return (await request("/anmelden", { data: { email, password }, expected })).cookie;
   }
   const admin = await login("dispo@example.test", password);
@@ -75,14 +75,15 @@ test("Pool-Sperre und CLI-Passwortwiederherstellung widerrufen alte Sitzungen", 
 
   for (const email of ["mira@example.test", "dispo@example.test"]) {
     const formBody = "title=&location=Interner+Testort";
-    let pending;
-    let responseAfterReset;
+    let delayedRequest: { pending: ClientRequest; responseAfterReset: Promise<{ status: number | undefined; html: string }> } | undefined;
     if (email === "dispo@example.test") {
-      responseAfterReset = new Promise((resolve, reject) => {
-        pending = startRequest(base + "/dispo/einsatz", { method: "POST",
-          headers: { Origin: origin, Cookie: admin, "Content-Type": "application/x-www-form-urlencoded",
-            "Content-Length": Buffer.byteLength(formBody) },
-        }, response => {
+      assert.ok(admin);
+      const pending = startRequest(base + "/dispo/einsatz", { method: "POST",
+        headers: { Origin: origin, Cookie: admin, "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": Buffer.byteLength(formBody) },
+      });
+      const responseAfterReset = new Promise<{ status: number | undefined; html: string }>((resolve, reject) => {
+        pending.once("response", response => {
           response.setEncoding("utf8");
           let html = "";
           response.on("data", chunk => { html += chunk; });
@@ -90,8 +91,9 @@ test("Pool-Sperre und CLI-Passwortwiederherstellung widerrufen alte Sitzungen", 
           response.once("error", reject);
         });
         pending.once("error", reject);
-        pending.flushHeaders();
       });
+      delayedRequest = { pending, responseAfterReset };
+      pending.flushHeaders();
       await Bun.sleep(100);
     }
     const operation = spawnSync(process.execPath, [entrypoint, "reset-password", email], {
@@ -99,9 +101,9 @@ test("Pool-Sperre und CLI-Passwortwiederherstellung widerrufen alte Sitzungen", 
     });
     assert.equal(operation.status, 0, operation.stderr);
     assert.equal((operation.stdout + operation.stderr).includes(replacement), false);
-    if (pending) {
-      pending.end(formBody);
-      const blocked = await responseAfterReset;
+    if (delayedRequest) {
+      delayedRequest.pending.end(formBody);
+      const blocked = await delayedRequest.responseAfterReset;
       assert.equal(blocked.status, 422);
       assert.doesNotMatch(blocked.html, /Personal und Einsätze|Mira|Interner Testort/);
     }

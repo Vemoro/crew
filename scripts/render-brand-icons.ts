@@ -6,7 +6,7 @@ const vector = readFileSync(new URL("../public/icon.svg", import.meta.url), "utf
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ deviceScaleFactor: 1 });
-  for (const [size, maskable] of [[180, false], [192, false], [512, false], [512, true]]) {
+  for (const [size, maskable] of [[180, false], [192, false], [512, false], [512, true]] as const) {
     const icon = maskable ? vector.replace(' rx="112"', "") : vector;
     await page.setViewportSize({ width: size, height: size });
     await page.setContent(`<style>body{margin:0}svg{display:block;width:100vw;height:100vh}</style>${icon}`);

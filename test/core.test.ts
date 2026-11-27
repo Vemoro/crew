@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { missingQualifications } from "../src/server/planning.ts";
-import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
+import { missingQualifications, type Shift } from "../src/server/planning";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson, encodeForm, type FormFields } from "./runtime";
 
-function future(days) {
+function future(days: number) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
@@ -20,10 +20,10 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   const server = await startTestServer(database.url, origin);
   t.after(() => stopTestServer(server));
   function client() {
-    let session;
-    return async (path, fields, status = 200, source = origin) => {
-      const body = fields instanceof FormData || !fields ? fields : new URLSearchParams(fields);
-      const headers = { Origin: source };
+    let session: string | undefined;
+    return async (path: string, fields?: FormFields | FormData | URLSearchParams, status = 200, source = origin) => {
+      const body = fields instanceof FormData || fields instanceof URLSearchParams || !fields ? fields : encodeForm(fields);
+      const headers: Record<string, string> = { Origin: source };
       if (session) headers.Cookie = session;
       const response = await fetch(base + path, { method: body ? "POST" : "GET", body, headers, redirect: "manual" });
       const cookie = response.headers.get("set-cookie");
@@ -53,7 +53,7 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   await admin("/dispo/einsatz", { title: "Stadtfest West", location: "Musterhalle", reference: "Desk DEMO-1",
     instructions: "Treffpunkt Tor 4" }, 303);
 
-  async function addShift(title, pay, day, start, end, fields = {}) {
+  async function addShift(title: string, pay: string, day: number, start: string, end: string, fields: FormFields = {}) {
     await admin("/dispo/schicht", { title, pay, event: 1, slots: 1,
       starts: `${future(day)}T${start}`, ends: `${future(day)}T${end}`, ...fields }, 303);
   }
@@ -128,6 +128,7 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   ]);
   assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
   const rejected = outcomes.find(outcome => outcome.status === "rejected");
+  assert.ok(rejected);
   assert.match(rejected.reason.message, /Alle Plätze sind bereits besetzt/);
   await addShift("Parallele Probe A", "60", 8, "14:00", "18:00");
   await addShift("Parallele Probe B", "60", 8, "15:00", "18:00");
@@ -137,7 +138,9 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   }
   const overlap = await Promise.allSettled([4, 5].map(shift => admin("/dispo/einteilen", { shift, person: 2, revision: 1 }, 303)));
   assert.equal(overlap.filter(outcome => outcome.status === "fulfilled").length, 1);
-  assert.match(overlap.find(outcome => outcome.status === "rejected").reason.message, /zeitgleich/);
+  const conflicting = overlap.find(outcome => outcome.status === "rejected");
+  assert.ok(conflicting);
+  assert.match(conflicting.reason.message, /zeitgleich/);
   await mira("/abmelden", {}, 303);
   await mira("/nachweis/1", undefined, 404);
   for (let count = 0; count < 9; count += 1) {
@@ -153,8 +156,12 @@ test("Ein bis zum Schichttag gültiger Nachweis reicht bis zum exklusiven Ende u
   await seedPerson(db, "mira@example.test", "Mira Nord", "synthetic-midnight-password");
   await db.query("INSERT INTO qualifications (id,person,name,valid_until,verified) VALUES (1,1,'aufbau','2030-01-02',1)");
   const requirements = JSON.stringify([{ name: "aufbau", timing: "assign" }]);
-  const atMidnight = { requirements, ends: "2030-01-02T23:00:00.000Z" };
-  const afterMidnight = { requirements, ends: "2030-01-02T23:01:00.000Z" };
+  const atMidnight: Shift = {
+    id: 1, event: 1, title: "Aufbau", starts: "2030-01-02T21:00:00.000Z", ends: "2030-01-02T23:00:00.000Z",
+    slots: 1, cents: 8000, requirements, questions: "[]", visibility: "pool", cancelled_at: null,
+    placement_revision: 1, anonymous_assigned: 0, event_title: "Stadtfest", location: "Musterhalle", instructions: "", filled: 0,
+  };
+  const afterMidnight = { ...atMidnight, ends: "2030-01-02T23:01:00.000Z" };
   assert.deepEqual(await missingQualifications(db, atMidnight, 1, "assign", "Europe/Berlin"), []);
   assert.deepEqual(await missingQualifications(db, afterMidnight, 1, "assign", "Europe/Berlin"), ["aufbau"]);
 });
