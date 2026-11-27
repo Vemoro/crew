@@ -8,6 +8,7 @@ const tests = /^(?:test|tests)\/|\.(?:test|spec)\.[^.]+$|^scripts\/check-browser
 const spacingProperties = /(?:^|(?<=[{};]))\s*((?:padding|margin)(?:-[a-z-]+)?|gap|row-gap|column-gap)\s*:\s*([^;{}]+)/gi;
 const pixels = /(?<![\w.-])([+-]?(?:\d*\.\d+|\d+)(?:e[+-]?\d+)?)px\b/gi;
 const commentsAndStrings = /\/\*[\s\S]*?\*\/|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'/g;
+const newline = /\r\n|[\r\n\u2028\u2029]/;
 
 // Tokenzählung nach Vemoro/desk, scripts/check-code-size.ts (AGPL-3.0-only).
 const nonCodeTokens = new Set([
@@ -45,7 +46,7 @@ function checkFunctions(path, content) {
 for (const path of new Set(paths.split("\0"))) {
   if (!source.test(path) || tests.test(path) || /(?:^|\/)routeTree\.gen\.ts$|\.d\.[cm]?ts$/.test(path) || !existsSync(path)) continue;
   const content = readFileSync(path, "utf8");
-  const lines = content ? content.replace(/\r?\n$/, "").split(/\r?\n/).length : 0;
+  const lines = content ? content.split(newline).length - Number(/[\r\n\u2028\u2029]$/.test(content)) : 0;
   if (lines > 400) {
     console.error(`${path}: ${lines} Zeilen, höchstens 400 erlaubt.`);
     process.exitCode = 1;
@@ -58,7 +59,7 @@ for (const path of new Set(paths.split("\0"))) {
   for (const match of code.matchAll(spacingProperties)) {
     if (![...match[2].matchAll(pixels)].some(([, number]) => Number(number) % 4 !== 0)) continue;
     const offset = match.index + match[0].indexOf(match[1]);
-    const line = code.slice(0, offset).split("\n").length;
+    const line = code.slice(0, offset).split(newline).length;
     console.error(`${path}:${line}: ${match[1]}: ${match[2].trim()} liegt außerhalb des 4-Pixel-Rasters.`);
     process.exitCode = 1;
   }

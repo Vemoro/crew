@@ -6,9 +6,10 @@ import ts from 'typescript';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const controls=new Set(['input','select','textarea']);
 function isHidden(node: ts.JsxOpeningLikeElement) {
-  return node.tagName.getText() === 'input' && node.attributes.properties.some(attribute =>
-    ts.isJsxAttribute(attribute) && attribute.name.getText() === 'type' &&
-    attribute.initializer && ts.isStringLiteral(attribute.initializer) && attribute.initializer.text === 'hidden');
+  const properties = [...node.attributes.properties].reverse();
+  const type = properties.find(attribute => ts.isJsxSpreadAttribute(attribute) || attribute.name.getText() === 'type');
+  return node.tagName.getText() === 'input' && type && ts.isJsxAttribute(type) &&
+    type.initializer && ts.isStringLiteral(type.initializer) && type.initializer.text === 'hidden';
 }
 
 function fieldRenderer(node:ts.Node) {
@@ -25,28 +26,18 @@ function fieldRenderer(node:ts.Node) {
   }
 }
 
-function receivesFieldProps(node:ts.JsxOpeningLikeElement,checker:ts.TypeChecker) {
-  const renderer=fieldRenderer(node);
-  const parameter=renderer?.parameters[0]?.name;
-  if(!renderer || !parameter || !ts.isIdentifier(parameter)) return false;
-  const binding=checker.getSymbolAtLocation(parameter);
-  if(!binding) return false;
-  const bindings=new Set([binding]);
-  const comesFromField=(expression:ts.Expression)=>{
-    const symbol=ts.isIdentifier(expression) && checker.getSymbolAtLocation(expression);
-    return Boolean(symbol && bindings.has(symbol));
-  };
-  if(ts.isBlock(renderer.body)) {
-    for(const statement of renderer.body.statements) {
-      if(!ts.isVariableStatement(statement)) continue;
-      for(const {name,initializer} of statement.declarationList.declarations) {
-        const alias=ts.isIdentifier(name) && checker.getSymbolAtLocation(name);
-        if(alias && initializer && ts.isObjectLiteralExpression(initializer) &&
-          initializer.properties.some(property=>ts.isSpreadAssignment(property) && comesFromField(property.expression))) bindings.add(alias);
-      }
-    }
-  }
-  return node.attributes.properties.some(attribute=>ts.isJsxSpreadAttribute(attribute) && comesFromField(attribute.expression));
+function fieldBinding(node: ts.JsxOpeningLikeElement, checker: ts.TypeChecker) {
+  const renderer = fieldRenderer(node);
+  const parameter = renderer?.parameters[0]?.name;
+  if (!renderer || !parameter || !ts.isIdentifier(parameter)) return;
+  const binding = checker.getSymbolAtLocation(parameter);
+  if (!binding) return;
+  const owned = new Set(['id', 'aria-describedby', 'aria-invalid', 'aria-label', 'aria-labelledby']);
+  if (node.attributes.properties.some(attribute => ts.isJsxAttribute(attribute) && owned.has(attribute.name.getText()))) return;
+  const spreads = node.attributes.properties.filter(ts.isJsxSpreadAttribute);
+  const [owner] = spreads;
+  if (spreads.length === 1 && ts.isIdentifier(owner.expression) &&
+    checker.getSymbolAtLocation(owner.expression) === binding) return renderer;
 }
 
 export function inspectFields(file:string,text:string) {
@@ -56,11 +47,14 @@ export function inspectFields(file:string,text:string) {
   host.getSourceFile=name=>name===file?source:undefined;
   const checker=ts.createProgram([file],options,host).getTypeChecker();
   const failures:string[]=[];
+  const used = new Set<ts.ArrowFunction>();
   function visit(node:ts.Node) {
-    if((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && controls.has(node.tagName.getText()) &&
-      !isHidden(node) && !receivesFieldProps(node,checker)) {
-      const {line}=source.getLineAndCharacterOfPosition(node.getStart());
-      failures.push(`${file}:${line+1}: ${node.tagName.getText()} braucht ein gemeinsames Field.`);
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && controls.has(node.tagName.getText()) && !isHidden(node)) {
+      const renderer = fieldBinding(node, checker);
+      const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+      if (!renderer) failures.push(`${file}:${line}: ${node.tagName.getText()} braucht ein gemeinsames Field mit unveränderten Attributen.`);
+      else if (used.has(renderer)) failures.push(`${file}:${line}: Jedes sichtbare Eingabefeld braucht sein eigenes Field.`);
+      else used.add(renderer);
     }
     ts.forEachChild(node,visit);
   }

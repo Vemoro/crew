@@ -8,7 +8,7 @@ Das Crew-Signet verbindet ein C mit einem quadratischen Akzent. Die Kopfleiste v
 
 Installiere zum Erzeugen der Rasterdateien mit `bun install --frozen-lockfile` und `bunx playwright install chromium` die Entwicklungswerkzeuge. Führe nach einer Änderung `bun scripts/render-brand-icons.mjs` aus und prüfe die maskierbare Variante im Manifest.
 
-Crew orientiert sich an Habens Gestaltungsregeln. Definiere Farben zentral für Hell und Dunkel. Verwende neutrale Flächen, feine Trennlinien und sparsame Akzente. Abstände folgen einem 4-Pixel-Raster. `bun run lint` prüft feste Pixelwerte in `padding`, `margin` und `gap` einschließlich ihrer Varianten. Beschriftungen stehen in Satzschreibung. Beträge und Kennzahlen verwenden gleich breite Ziffern. [Gestaltung von Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/DESIGN.md)
+Crew orientiert sich an Habens Gestaltungsregeln. Definiere Farben zentral für Hell und Dunkel. Verwende neutrale Flächen, feine Trennlinien und sparsame Akzente. Abstände folgen einem 4-Pixel-Raster. `bun run lint` prüft feste Pixelwerte in `padding`, `margin` und `gap` einschließlich ihrer Varianten. Beschriftungen stehen in Satzschreibung. Beträge und Kennzahlen verwenden gleich breite Ziffern. [Gestaltung von Haben](https://github.com/Speicherstadt/haben/blob/e3ece9cbc19c4b649d35693fd13e27bbf49a1f3a/DESIGN.md)
 
 Verwende eine konsistente Icon-Komponente mit verständlichen Beschriftungen. Ein allein stehendes Symbol braucht einen zugänglichen Namen. Am Smartphone öffnet ein beschrifteter Menüknopf die Hauptnavigation. Der aktuelle Bereich bleibt erkennbar.
 
@@ -16,7 +16,7 @@ Verwende eine konsistente Icon-Komponente mit verständlichen Beschriftungen. Ei
 
 Beginne mit der für die Rolle passenden Übersicht. Gruppiere zusätzliche Arbeitsziele nach Aufgaben. Führe allgemeine Funktionen wie Konto, Erscheinungsbild, Dokumentation und Abmelden zusammen, sobald der Umfang eine eigene Seitenleiste rechtfertigt. Einstellungen für die Dispo bleiben an ihre Rolle gebunden. Ein Quellcode-Link führt zum ausgelieferten Stand, wenn dessen Adresse eingerichtet ist. Eine sichtbare Versionsnummer bezieht sich auf denselben Stand.
 
-Verwende für Fachlinks 14 Pixel, für Nebenaktionen 13 Pixel und für Gruppenüberschriften oder Versionsangaben 12 Pixel. In kurzen Fenstern bleibt die Navigation scrollbar. Mobile Menüziele sind mindestens 44 × 44 Pixel groß. Escape schließt das Menü und gibt den Fokus an den Auslöser zurück. Bei einer Navigation bleibt das Ziel erreichbar. Ein lokaler Sprung schließt das Menü und fokussiert den Hauptinhalt. Beim Wechsel zur Desktopansicht bleiben aktive Ansicht und Tastaturzugang erkennbar.
+Verwende für Fachlinks 14 Pixel, für Nebenaktionen 13 Pixel und für Gruppenüberschriften oder Versionsangaben 12 Pixel. In kurzen Fenstern bleibt die Navigation scrollbar. Mobile Menüziele sind mindestens 44 × 44 Pixel groß. Escape schließt das Menü und gibt den Fokus an den Auslöser zurück. Bei einer Navigation bleibt das Ziel erreichbar. Ein lokaler Sprung schließt das Menü und fokussiert den angesprungenen Abschnitt. Beim Wechsel zur Desktopansicht geht der Menüfokus zum entsprechenden sichtbaren Link.
 
 ## Raster und Schrift
 
@@ -33,8 +33,8 @@ Anordnung und Tab-Reihenfolge stimmen überein. Fokusmarkierungen, Texte und Bed
 ### Voraussetzungen, Felder und Auswahl
 
 - Verwende `Field` für sichtbare Eingaben, Auswahllisten und mehrzeilige Felder. Der Name gehört in ein eigenes zugeordnetes Label. Hinweise und Fehler stehen daneben und werden über `aria-describedby` zugeordnet. Setze `aria-invalid`, wenn ein Fehler einem Feld zugeordnet ist. Bei zusammengehörigen Kästchen oder Optionen benennt eine Legende die Gruppe. Versteckte IDs und Revisionen kommen ohne sichtbare Felder aus.
-- Eingabefehler halten die Hauptaktion erreichbar. Die Prüfung beim Absenden zeigt den Fehler beim Feld und führt zum ersten korrigierbaren Feld. Öffne dabei einen eingeklappten Bereich bei Bedarf. Erhalte korrigierbare Eingaben. Ein fachlicher Sperrgrund steht bei der Aktion und verweist auf einen für die Rolle erreichbaren Lösungsweg. Laufende Vorgänge benennen ihre Phase, Ladefehler bieten bei wiederholbaren Vorgängen einen erneuten Versuch an.
-- Kleine feste Listen verwenden native Auswahlelemente. Wachsende Listen wie Poolmitglieder verwenden bei Bedarf eine durchsuchbare Auswahl mit unterscheidbaren Treffern. Tastatur, Touch, leere Treffer und Abbruch gehören zur Abnahme. Bietet eine Aufgabe mehrere Wege, benennt der Menüknopf die Aufgabe. Entscheidungen mit verschiedenen Folgen können in einem Dialog erklärt werden. Vorübergehend gesperrte Optionen zeigen ihren Grund am jeweiligen Eintrag.
+- Eingabefehler halten die Hauptaktion erreichbar. Die Prüfung beim Absenden zeigt den Fehler beim Feld und führt zum ersten korrigierbaren Feld. Öffne dabei einen eingeklappten Bereich bei Bedarf. Erhalte korrigierbare Eingaben. Ein fachlicher Sperrgrund steht bei der Aktion, ist mit ihr über `aria-describedby` verknüpft und verweist auf einen für die Rolle erreichbaren Lösungsweg. Laufende Vorgänge benennen ihre Phase, Ladefehler bieten bei wiederholbaren Vorgängen einen erneuten Versuch an.
+- Kleine feste Listen verwenden native Auswahlelemente. Wachsende Listen wie Poolmitglieder verwenden bei Bedarf eine durchsuchbare Auswahl mit unterscheidbaren Treffern. Tastatur, Touch, leere Treffer und Abbruch gehören zur Abnahme. Bietet eine Aufgabe mehrere Wege, benennt der Menüknopf die Aufgabe. Entscheidungen mit verschiedenen Folgen können in einem Dialog erklärt werden. Vorübergehend gesperrte Optionen zeigen ihren Grund am jeweiligen Eintrag und verknüpfen ihn mit `aria-describedby`.
 - Dateiauswahl verwendet den nativen Dateidialog und zeigt gewählte Namen vor dem Absenden. Ein eigenständiger Sofort-Upload ist eine benannte Aktion mit Rückmeldung über Fortschritt oder Ergebnis.
 
 ## Aufbau von Arbeitsbereichen
@@ -52,7 +52,7 @@ Ein vergleichbarer Seitenkopf steht vor dem Arbeitsinhalt und zeigt Titel, Zusta
 
 ### Listen und Tabellen
 
-Häufige Aktionen stehen am Ende der Zeile und bleiben direkt erreichbar. Seltene Aktionen können ein gemeinsames Menü nutzen. Bei derselben Aktionsgruppe steht eine gefährliche Daueraktion vorn und die Hauptaktion am Ende. Inhaltslinks gehören zu ihrer Zelle. Symbolaktionen brauchen bei mehreren gleichartigen Zeilen einen zugänglichen Namen mit Objektbezug. Escape gibt den Fokus an den Menüauslöser zurück. Verschwindet eine Zeile, erhält ein sinnvoller Nachfolger den Fokus. Mobil bleiben Bezeichnung, Wert und Aktionen zugeordnet. Eingebettete Knöpfe und Menüs liegen außerhalb eines anklickbaren Zeilenlinks.
+Häufige Aktionen stehen am Ende der Zeile nach dem Status und bleiben direkt erreichbar. Die Aktion zur Statusbehebung steht vor Symbolaktionen. Seltene Aktionen stehen bei Bedarf im gemeinsamen Menü am Zeilenende. Bei derselben Aktionsgruppe steht eine gefährliche Daueraktion vorn und die Hauptaktion am Ende. Inhaltslinks gehören zu ihrer Zelle. Symbolaktionen brauchen bei mehreren gleichartigen Zeilen einen zugänglichen Namen mit Objektbezug. Escape gibt den Fokus an den Menüauslöser zurück. Verschwindet eine Zeile, erhält ein sinnvoller Nachfolger den Fokus. Mobil bleiben Bezeichnung, Wert und Aktionen zugeordnet. Eingebettete Knöpfe und Menüs liegen außerhalb eines anklickbaren Zeilenlinks.
 
 ### Status und Handlungsbedarf
 
@@ -66,7 +66,7 @@ Bewahre Titel und Aktionsbereich beim Scrollen gut erreichbar. Prüfe Dialoge mi
 
 - Wenn Einstellungen wachsen, gruppiere sie nach Aufgaben. Am Desktop können Bereichsliste und Inhalt nebeneinander stehen. Am Smartphone gehören der sichtbare Rückweg, Direktlinks, Neuladen und Browser-Zurück zur Abnahme. Beim Öffnen fokussiert der Bereichstitel, beim Rückweg der bisher gewählte Eintrag.
 - Eine geführte Aufgabe mit fester Reihenfolge verwendet eine geordnete Liste und `aria-current="step"`. Ein Text kennzeichnet erledigte Schritte. Frei wechselbare Bewerbungs- und Schichtzustände bleiben als fachliche Zustände erkennbar.
-- Neue Tastenkürzel stehen im zugehörigen Auslöser und verwenden erreichbare Tasten der jeweiligen Plattform. Eingaben und geöffnete Dialoge behalten Vorrang. Eine künftige globale Suche berücksichtigt Rollen und zeigt Treffer mit verständlichem Kontext.
+- Neue Tastenkürzel stehen im zugehörigen Auslöser. Steuertasten richten sich nach der Plattform. Buchstaben und Zeichen bleiben auf deutschsprachigen Tastaturen direkt erreichbar. Eingaben und geöffnete Dialoge behalten Vorrang. Eine künftige globale Suche berücksichtigt Rollen und zeigt Treffer mit verständlichem Kontext.
 
 ## Oberfläche prüfen
 

@@ -8,10 +8,26 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-open-di
 const mobileMenu = document.querySelector<HTMLDetailsElement>('.mobile-nav');
 const trigger = mobileMenu?.querySelector('summary');
 const navigationLinks = document.querySelectorAll<HTMLAnchorElement>('header nav a');
+let lastMobileLink: HTMLAnchorElement | undefined;
+
+mobileMenu?.addEventListener('focusin', event => {
+  lastMobileLink = event.target instanceof HTMLAnchorElement ? event.target : undefined;
+});
+matchMedia('(max-width: 35rem)').addEventListener('change', event => {
+  if (event.matches || !mobileMenu?.open) return;
+  const focusInMenu = mobileMenu.contains(document.activeElement) || document.activeElement === document.body;
+  mobileMenu.open = false;
+  if (!focusInMenu) return;
+  const desktopLinks = [...document.querySelectorAll<HTMLAnchorElement>('.desktop-nav a')];
+  const target = desktopLinks.find(link => link.href === lastMobileLink?.href)
+    ?? desktopLinks.find(link => link.hasAttribute('aria-current')) ?? desktopLinks[0];
+  target?.focus();
+});
 
 function markCurrentSection() {
   for (const link of navigationLinks) {
-    if (link.href === location.href) link.setAttribute('aria-current', link.hash ? 'location' : 'page');
+    const samePage = link.origin === location.origin && link.pathname === location.pathname;
+    if (samePage && (!link.hash || link.hash === location.hash)) link.setAttribute('aria-current', link.hash ? 'location' : 'page');
     else link.removeAttribute('aria-current');
   }
 }
@@ -20,8 +36,8 @@ window.addEventListener('hashchange', markCurrentSection);
 window.addEventListener('popstate', markCurrentSection);
 markCurrentSection();
 
-mobileMenu?.addEventListener('keydown', event => {
-  if (event.key !== 'Escape' || !mobileMenu.open) return;
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !mobileMenu?.open || document.querySelector('dialog[open]')) return;
   event.preventDefault();
   mobileMenu.open = false;
   trigger?.focus();
@@ -37,6 +53,7 @@ mobileMenu?.addEventListener('click', event => {
   if (destination.hash !== location.hash) history.pushState(null, '', destination);
   markCurrentSection();
   mobileMenu.open = false;
-  document.querySelector('main')?.focus({ preventScroll: true });
+  target.tabIndex = -1;
+  target.focus({ preventScroll: true });
   target.scrollIntoView();
 });

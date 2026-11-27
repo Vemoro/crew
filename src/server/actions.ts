@@ -1,7 +1,7 @@
 import { updatePoolAccess, type Person } from './auth';
 import { first, type Query } from './db';
 import { expiration, field, id, lines, localTime } from './forms';
-import { qualificationName, requireInput } from './inputs';
+import { EvidenceInputError, qualificationName, requireInput } from './inputs';
 import { assign, cancelShift, correctEvent, inviteToShift, releasePlace, respond, withdraw, type Requirement } from './planning';
 import { requestQualification, reviewQualification, submitQualification } from './qualifications';
 
@@ -17,9 +17,9 @@ export async function submitStaff(db: Query, user: Person, path: string, form: F
     const file = form.get('evidence');
     let evidence = null;
     if (file instanceof File && file.size) {
-      requireInput(file.size <= 2_000_000 && file.type === 'application/pdf', 'Erlaubt sind PDF-Dateien bis 2 MB.');
+      if (file.size > 2_000_000 || file.type !== 'application/pdf') throw new EvidenceInputError('Erlaubt sind PDF-Dateien bis 2 MB.');
       evidence = Buffer.from(await file.arrayBuffer());
-      requireInput(evidence.subarray(0, 5).toString() === '%PDF-', 'Die Datei ist keine PDF-Datei.');
+      if (evidence.subarray(0, 5).toString() !== '%PDF-') throw new EvidenceInputError('Die Datei ist keine PDF-Datei.');
     }
     await submitQualification(db, user.id, name, validUntil, evidence);
     return '/#profil';

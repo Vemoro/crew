@@ -31,17 +31,21 @@ export async function loadRequests(db: Query, person: number) {
   return rows<QualificationRequest>(db, `SELECT name,note,state FROM qualification_requests WHERE person=$1 ORDER BY state='done',name`, [person]);
 }
 
-function Profile({ user, qualifications }: { user: Person; qualifications: Qualification[] }) {
+type EvidenceFailure = { message: string; form: FormData };
+
+function Profile({ user, qualifications, evidenceFailure }: { user: Person; qualifications: Qualification[]; evidenceFailure?: EvidenceFailure }) {
   return <Box title="Profil und Qualifikationen" id="profil">
     <Form action="/verfuegbarkeit"><Field title="Typische Verfügbarkeit oder Hinweis">{control => <textarea {...control} name="availability" maxLength={1000} defaultValue={user.availability}/>}</Field>
       <Submit>Verfügbarkeit speichern</Submit></Form>
     <Qualifications entries={qualifications}/>
     {user.status !== 'rejected' && <Form action="/qualifikation" multipart>
       <h3>Qualifikation einreichen oder erneuern</h3><p className="muted">Wenn du dieselbe Bezeichnung verwendest, ersetzt du den bisherigen Eintrag. Die Dispo prüft den neuen Stand.</p>
-      <Field title="Bezeichnung">{control => <input {...control} name="name" maxLength={100} required/>}</Field>
-      <Field title="Gültig bis (optional)">{control => <input {...control} name="validUntil" type="date"/>}</Field>
-      <Field title="Nachweis als PDF" hint="Optional, bis 2 MB.">{control =>
-        <input {...control} name="evidence" type="file" accept="application/pdf"/>}</Field>
+      <Field title="Bezeichnung">{control => <input {...control} name="name" maxLength={100} required
+        defaultValue={valueOf(evidenceFailure?.form, 'name')}/>}</Field>
+      <Field title="Gültig bis (optional)">{control => <input {...control} name="validUntil" type="date"
+        defaultValue={valueOf(evidenceFailure?.form, 'validUntil')}/>}</Field>
+      <Field title="Nachweis als PDF" hint="Optional, bis 2 MB." error={evidenceFailure?.message}>{control =>
+        <input {...control} name="evidence" type="file" accept="application/pdf" autoFocus={Boolean(evidenceFailure)}/>}</Field>
       <Submit>Qualifikation einreichen</Submit></Form>}
   </Box>;
 }
@@ -58,9 +62,9 @@ function Cancellation({ shift, revision }: { shift: Shift; revision: number }) {
   </Confirmation>;
 }
 
-export async function staffHome(db: Query, user: Person, timezone: string) {
+export async function staffHome(db: Query, user: Person, timezone: string, evidenceFailure?: EvidenceFailure) {
   const qualifications = await loadQualifications(db, user.id);
-  const profile = <Profile user={user} qualifications={qualifications}/>;
+  const profile = <Profile user={user} qualifications={qualifications} evidenceFailure={evidenceFailure}/>;
   const heading = <><p className="eyebrow">Personalportal</p><h1>Hallo, {user.name}</h1></>;
   if (user.status !== 'active') return page({ user, title: 'Meine Bewerbung', children: <>{heading}
     <Box title="Meine Bewerbung" id="bewerbungen"><p><Status state={user.status}/></p>

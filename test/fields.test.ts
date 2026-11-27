@@ -10,4 +10,8 @@ test('Sichtbare Felder übernehmen die Attribute des gemeinsamen Field', () => {
   assert.equal(inspect('<input />').length, 1);
   assert.equal(inspect('<Field>{control => <textarea />}</Field>').length, 1);
   assert.equal(inspect('<Field>{control => <textarea {...other} />}</Field>').length, 1);
+  assert.equal(inspect('<Field>{control => <input {...control} id="manuell" />}</Field>').length, 1);
+  assert.equal(inspect('<Field>{control => <input aria-label="anderer Name" {...control} />}</Field>').length, 1);
+  assert.equal(inspect('<Field>{control => <><input {...control} /><input {...control} /></>}</Field>').length, 1);
+  assert.equal(inspect('<input type="hidden" {...{type:"text"}} />').length, 1);
 });

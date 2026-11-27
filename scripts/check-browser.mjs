@@ -26,7 +26,8 @@ let runningApp = await startTestServer(database.url, origin);
 const screenshotDirectory = process.env.CREW_SCREENSHOTS || (engine === "chromium" ? "build/screenshots" : "build/webkit");
 mkdirSync(screenshotDirectory, { recursive: true });
 const auditedViews = new Set(["personal-hell", "personal-dunkel", "personal-handy-dunkel", "personal-handy-hell",
-  "dispo-hell", "dispo-dunkel", "einladung-390-dark", "einladung-390-light", "pdf-formatfehler", "navigation-handy-offen"]);
+  "dispo-hell", "dispo-dunkel", "einladung-390-dark", "einladung-390-light", "pdf-formatfehler",
+  "navigation-handy-hell-offen", "navigation-handy-dunkel-offen"]);
 const show = async (page, name, fullPage = true) => {
   if (engine === "chromium" && auditedViews.has(name)) await checkAccessibility(page, name);
   return page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
@@ -45,6 +46,7 @@ try {
   else await staff.keyboard.press("Tab");
   assert.equal(await staff.evaluate(() => document.activeElement.textContent), "Zum Inhalt");
   await staff.keyboard.press("Enter");
+  assert.equal(await staff.locator('.desktop-nav a[href="/registrieren"]').getAttribute('aria-current'), 'page');
   await staff.getByLabel("Name", { exact: true }).fill("Mira Nord");
   await staff.getByLabel("E-Mail-Adresse").fill("mira@example.test");
   await staff.getByLabel("Passwort").fill(password);
@@ -60,6 +62,7 @@ try {
   const planning = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
   const admin = await planning.newPage();
   await admin.goto(origin + "/anmelden");
+  if (engine === "chromium") await checkAccessibility(admin, "Anmeldung");
   await admin.getByLabel("E-Mail-Adresse").fill("dispo@example.test");
   await admin.getByLabel("Passwort").fill(password);
   await admin.getByRole("button", { name: "Anmelden", exact: true }).click();
@@ -78,7 +81,7 @@ try {
   await admin.getByRole("button", { name: "Einsatz anlegen", exact: true }).click();
   await admin.getByText("Schicht hinzufügen", { exact: true }).click();
   await admin.getByLabel("Schichtname").fill("Aufbau");
-  const future = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+  const future = process.env.CREW_BROWSER_SHIFT_DATE || new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
   await admin.getByLabel("Beginn").fill(future + "T14:00");
   await admin.getByLabel("Ende").fill(future + "T12:00");
   await admin.getByLabel("Vergütung pro Person in Euro").fill("80");
