@@ -11,12 +11,12 @@ const broken = name + "-invalid";
 const fallback = name + "-fallback";
 const origin = "http://localhost:8080";
 const password = "synthetic-restore-password";
-const session = "7".repeat(64);
 const evidence = "%PDF-1.4\n% Crew synthetischer Nachweis\n%%EOF\n";
 const repository = fileURLToPath(new URL("../", import.meta.url));
 const composeArgs = (project, args) => ["compose", "-f", fileURLToPath(new URL("../compose.yaml", import.meta.url)), "-p", project, ...args];
 const composeOptions = {
-  env: { ...process.env, CREW_PORT: "0", CREW_ORIGIN: origin, CREW_REGISTRATION: "open", CREW_TRUSTED_PROXY: "" },
+  env: { ...process.env, CREW_PORT: "0", CREW_ORIGIN: origin, CREW_REGISTRATION: "open", CREW_TRUSTED_PROXY: "",
+    CREW_DB_PASSWORD: "synthetic-restore-db-password", CREW_AUTH_SECRET: "synthetic-restore-auth-secret-for-tests" },
   cwd: repository,
   encoding: "utf8",
   windowsHide: true,
@@ -24,10 +24,11 @@ const composeOptions = {
 const compose = (project, args, input) => execFileSync("docker", composeArgs(project, args), {
   ...composeOptions, input, stdio: ["pipe", "pipe", "pipe"],
 }).trim();
-const maintenance = (project, ...args) => compose(project, ["run", "--rm", "-T", "crew", "node", "admin.js", ...args]);
-const copySnapshot = project => compose(project, ["run", "--rm", "-T", "-v", `${source}_crew-data:/snapshot:ro`, "crew",
-  "sh", "-c", "cp -a /snapshot/. /app/data/"]);
-const sourceHash = () => compose(source, ["run", "--rm", "-T", "crew", "sha256sum", "/app/data/crew.sqlite"]);
+const maintenance = (project, ...args) => compose(project, ["run", "--rm", "-T", "crew", "bun", "run", "admin", ...args]);
+const sql = (project, input) => compose(project, ["exec", "-T", "postgres", "psql",
+  "-X", "-U", "crew", "-d", "crew", "--single-transaction", "-v", "ON_ERROR_STOP=1"], input);
+const dump = project => compose(project, ["exec", "-T", "postgres", "pg_dump", "-U", "crew", "--no-owner", "--no-acl", "crew"]);
+const database = project => compose(project, ["up", "-d", "--wait", "postgres"]);
 
 async function start(project) {
   compose(project, ["up", "-d"]);
@@ -74,30 +75,33 @@ async function verify(base) {
 
 try {
   for (const project of [source, target, broken, fallback]) compose(project, ["build"]);
-  compose(source, ["run", "--rm", "-T", "crew", "node", "--input-type=module", "-"], `
-    import { openDatabase, passwordHash, sessionHash } from './model.js';
-    const db = openDatabase();
-    const secret = passwordHash(${JSON.stringify(password)});
-    db.prepare("INSERT INTO people (id,email,name,secret,role,status) VALUES (1,'dispo@example.test','Dispo',?,'admin','active'),(2,'mira@example.test','Mira Nord',?,'staff','active'),(3,'leni@example.test','Leni',?,'staff','active')").run(secret, secret, secret);
-    db.prepare("INSERT INTO qualifications (person,name,verified,evidence) VALUES (2,'Staplerschein',1,?)").run(Buffer.from(${JSON.stringify(evidence)}));
-    db.prepare("INSERT INTO sessions (token,person,expires) VALUES (?,2,?)").run(sessionHash(${JSON.stringify(session)}),Date.now()+3600000);
-    db.exec("INSERT INTO events (id,title,location) VALUES (1,'Stadtfest West','Musterhalle')");
-    db.prepare("INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility) VALUES (1,1,'Aufbau',?,?,2,8000,'[]',?,'invite')")
-      .run(new Date(Date.now()+86400000).toISOString(),new Date(Date.now()+100800000).toISOString(),JSON.stringify(['Welcher Treffpunkt?']));
-    db.prepare("INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility) VALUES (2,1,'Abbau',?,?,1,4500,'[]','[]','pool')")
-      .run(new Date(Date.now()+104400000).toISOString(),new Date(Date.now()+108000000).toISOString());
-    db.prepare("INSERT INTO invitations VALUES (1,2)").run();
-    db.prepare("INSERT INTO responses (shift,person,status,answers) VALUES (1,2,'assigned',?)").run(JSON.stringify(['Tor 4']));
-    db.close();
-  `);
   const sourceBase = await start(source);
-  const oldCookie = { Cookie: "crew_session=" + session };
-  assert.equal((await fetch(sourceBase + "/nachweis/1", { headers: oldCookie })).status, 200);
+  const hash = await Bun.password.hash(password);
+  sql(source, `
+    INSERT INTO people (id,email,name,role,status) VALUES
+      (1,'dispo@example.test','Dispo','admin','active'),(2,'mira@example.test','Mira Nord','staff','active'),
+      (3,'leni@example.test','Leni','staff','active');
+    INSERT INTO auth_accounts ("userId","providerId","accountId",password)
+      SELECT auth_id,'credential',auth_id::text,'${hash}' FROM people;
+    INSERT INTO qualifications (id,person,name,verified,evidence)
+      VALUES (1,2,'Staplerschein',1,decode('${Buffer.from(evidence).toString("hex")}','hex'));
+    INSERT INTO events (title,location) VALUES ('Stadtfest West','Musterhalle');
+    INSERT INTO shifts (event,title,starts,ends,slots,cents,requirements,questions,visibility) VALUES
+      (1,'Aufbau','2099-01-01T10:00:00.000Z','2099-01-01T14:00:00.000Z',2,8000,'[]','["Welcher Treffpunkt?"]','invite'),
+      (1,'Abbau','2099-01-01T15:00:00.000Z','2099-01-01T17:00:00.000Z',1,4500,'[]','[]','pool');
+    INSERT INTO invitations VALUES (1,2);
+    INSERT INTO responses (shift,person,status,answers) VALUES (1,2,'assigned','["Tor 4"]');
+  `);
+  const oldCookie = { Cookie: await login(sourceBase, "mira@example.test") };
   const untouchedCookie = { Cookie: await login(sourceBase, "mira@example.test") };
   await verify(sourceBase);
   compose(source, ["stop", "crew"]);
+  const backup = dump(source);
+  assert.match(backup, /PostgreSQL database dump/);
+  for (const project of [target, broken, fallback]) database(project);
+  sql(target, backup);
+  sql(fallback, backup);
 
-  for (const project of [target, broken, fallback]) copySnapshot(project);
   const liveSource = await start(source);
   const logout = await fetch(liveSource + "/abmelden", { method: "POST", redirect: "manual",
     headers: { ...oldCookie, Origin: origin }, body: new URLSearchParams() });
@@ -105,31 +109,14 @@ try {
   maintenance(target, "invalidate-sessions");
   const targetBase = await start(target);
   assert.equal((await fetch(targetBase + "/nachweis/1", { headers: oldCookie })).status, 404);
+  assert.equal((await fetch(targetBase + "/nachweis/1", { headers: untouchedCookie })).status, 404);
   await verify(targetBase);
 
-  compose(source, ["stop", "crew"]);
-  const beforeFailure = sourceHash();
-  compose(broken, ["run", "--rm", "-T", "crew", "node", "--input-type=module", "-"], `
-    import { closeSync, openSync, writeSync } from 'node:fs';
-    import { DatabaseSync } from 'node:sqlite';
-    const path = '/app/data/crew.sqlite';
-    const db = new DatabaseSync(path, { readOnly: true });
-    const rootPage = db.prepare("SELECT rootpage FROM sqlite_schema WHERE name='qualifications'").get().rootpage;
-    const pageSize = db.prepare("PRAGMA page_size").get().page_size;
-    db.close();
-    const file = openSync(path,'r+');
-    writeSync(file, Buffer.from([0]), 0, 1, (rootPage-1)*pageSize);
-    closeSync(file);
-  `);
-  const failed = spawnSync("docker", composeArgs(broken, ["run", "--rm", "-T", "crew", "node", "admin.js", "invalidate-sessions"]), composeOptions);
-  assert.equal(failed.error, undefined);
-  assert.notEqual(failed.status, 0, "Eine beschädigte Datenbank darf nicht als bereit gemeldet werden.");
-  assert.match(failed.stderr, /Datenbank ist nicht intakt|database disk image is malformed/);
-  assert.equal(sourceHash(), beforeFailure);
-  const recoveredSource = await start(source);
-  assert.equal((await fetch(recoveredSource + "/nachweis/1", { headers: oldCookie })).status, 404);
-  assert.equal((await fetch(recoveredSource + "/nachweis/1", { headers: untouchedCookie })).status, 200);
-  await verify(recoveredSource);
+  assert.throws(() => sql(broken, backup + "\nINVALID BACKUP;\n"), /syntax error/);
+  assert.match(sql(broken, "SELECT to_regclass('public.people') IS NULL AS empty;"), /empty[\s|+-]+t\b/);
+  assert.equal((await fetch(liveSource + "/nachweis/1", { headers: oldCookie })).status, 404);
+  assert.equal((await fetch(liveSource + "/nachweis/1", { headers: untouchedCookie })).status, 200);
+  await verify(liveSource);
   maintenance(fallback, "invalidate-sessions");
   await verify(await start(fallback));
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim();

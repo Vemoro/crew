@@ -4,12 +4,13 @@ const offlinePage = `<!doctype html>
 <h1>Verbindung fehlt</h1><p>Verbinde dich mit dem Internet oder deinem Firmennetz, um Crew zu öffnen.</p>
 <p><a href="/">Crew erneut öffnen</a></p></main></body></html>`;
 
-globalThis.addEventListener("install", event => event.waitUntil(globalThis.skipWaiting()));
-globalThis.addEventListener("activate", event => event.waitUntil(globalThis.clients.claim()));
+const worker = globalThis as unknown as ServiceWorkerGlobalScope;
+worker.addEventListener("install", event => event.waitUntil(worker.skipWaiting()));
+worker.addEventListener("activate", event => event.waitUntil(worker.clients.claim()));
 
-globalThis.addEventListener("fetch", event => {
+worker.addEventListener("fetch", event => {
   const { request } = event;
-  if (request.method !== "GET" || request.mode !== "navigate" || new URL(request.url).origin !== globalThis.location.origin) return;
+  if (request.method !== "GET" || request.mode !== "navigate" || new URL(request.url).origin !== worker.location.origin) return;
   event.respondWith(fetch(request).catch(() => new Response(offlinePage, {
     status: 503,
     headers: {

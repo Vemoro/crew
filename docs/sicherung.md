@@ -1,16 +1,39 @@
-# Crew sichern und wiederherstellen
+# Sicherung und Wiederanlauf
 
-1. Halte Crew vor der Offline-Sicherung an. Unter Compose verwende `docker compose stop crew`.
-2. Sichere das ganze Datenverzeichnis oder Compose-Volume einschließlich möglicher SQLite-Begleitdateien. Darin liegen auch Sitzungen, Personaldaten und PDF-Nachweise. Verwahre die Kopie mit beschränktem Zugriff.
-3. Für einen Restore stoppe den Zieldienst, sichere zunächst seinen vorhandenen Stand und stelle den Datenbestand in einem separaten Zielverzeichnis oder Volume wieder her. Erhalte die Schreibrechte des Dienstkontos.
-4. Bevor du den Zieldienst erreichbar machst, widerrufe die in der Sicherung enthaltenen Sitzungen. Verwende den Namen des wiederhergestellten Compose-Projekts: `docker compose -p crew-restore run --rm crew node admin.js invalidate-sessions`. Ersetze `crew-restore` durch den tatsächlichen Zielprojektnamen. Nativ setze `CREW_DB` ausdrücklich auf die wiederhergestellte Datei und verwende `npm run admin -- invalidate-sessions`. Dies betrifft alle Konten des Ziels und verlangt eine neue Anmeldung.
-5. Starte mit demselben Crew-Stand in einer isolierten Umgebung. Prüfe Anmeldung, Pool, Besetzung und Nachweise anhand synthetischer Daten. Prüfe auch, ob der Dienst eine separate Sicherung der Ausgangsversion starten kann. Wenn Invalidation oder Probe fehlschlagen, halte das Ziel geschlossen und bewahre die unveränderte Quelle.
-6. Prüfe vor Freigabe des Zieldienstes, welche Poolprofile nach Erstellung der Sicherung bereinigt wurden. Wiederhole nötige Bereinigungen im isolierten Zielbestand. Halte das Ziel bis zur Klärung blockierender Einteilungen geschlossen. Das gilt auch bei der Rückkehr zu einem früheren Stand. [Personendaten exportieren und bereinigen](personendaten.md)
+Sichere PostgreSQL regelmäßig mit `pg_dump`. Ein logischer Dump ist auch im laufenden Betrieb konsistent. Halte bei einer geplanten Umstellung den Webdienst vor der letzten Sicherung an, damit später keine Änderungen fehlen. Der Dump enthält Personaldaten, Passwort-Hashes, Sitzungen und PDF-Nachweise. Beschränke den Zugriff und verwahre den stabilen Sitzungsschlüssel separat in der Betriebsumgebung.
 
-`node scripts/check-restore.mjs` führt in der CI und lokal eine Wiederanlaufprobe mit getrennten Compose-Projekten durch. Der Test erstellt ausschließlich synthetische Daten, prüft einen absichtlich beschädigten Zielbestand und entfernt die dafür angelegten Container und Volumes.
+## Sicherung unter Docker Compose
 
-## Rückkehr zu einem früheren Stand
+Die Befehle laufen im Projekt der vorhandenen Installation. Ergänze `-p`, wenn du einen eigenen Projektnamen verwendest. Eine POSIX-Shell mit `umask 077` legt neue Sicherungsdateien nur für deinen Benutzer lesbar an.
 
-Eine Rückkehr verwendet die separate Vorupdate-Sicherung, den damaligen Anwendungsstand und ein separates Ziel. Verwende die CLI dieses Stands, damit der neuere Prozess die Sicherung nicht vorab migriert. Wenn die frühere CLI keinen Sitzungswiderruf anbietet, halte den Dienst isoliert und lösche vor der Freigabe die Zeilen der Tabelle `sessions` mit SQLite in der ausdrücklich ausgewählten Zielkopie. Prüfe vorher, dass die gewählte Datei existiert und zum Ziel gehört. Führe danach die Start- und Anmeldeprobe mit der früheren Laufzeit aus.
+```sh
+backup="/geschuetzt/crew-sicherung-$(date -u +%Y%m%dT%H%M%SZ).sql"
+(
+  umask 077
+  set -C
+  docker compose exec -T postgres pg_dump -U crew -d crew --no-owner --no-acl > "$backup" &&
+  sha256sum "$backup" > "$backup.sha256"
+)
+```
 
-[Release-Abnahme](release-abnahme.md)
+Prüfe, dass der Dump erfolgreich erstellt wurde. Bei nativer Installation verwende die zur Serverversion passenden PostgreSQL-Clientwerkzeuge und die Verbindungsdaten der vorgesehenen Quelldatenbank.
+
+## Wiederherstellung auf einem getrennten Ziel
+
+Wähle eine erfolgreich erstellte Sicherungsdatei aus und prüfe die zugehörige SHA-256-Summe. Lege für das Ziel ein leeres PostgreSQL-Volume, passende Zugangsdaten und einen separaten Host-Port fest. Die Beispiele verwenden den Projektnamen `crew-restore`. Halte den Dienst bis nach der Abnahme für andere Nutzer unerreichbar.
+
+```sh
+backup=/geschuetzt/crew-sicherung-20260101T120000Z.sql
+sha256sum --check "$backup.sha256" &&
+docker compose -p crew-restore up -d --wait postgres &&
+docker compose -p crew-restore exec -T postgres psql -X -U crew -d crew \
+  --single-transaction -v ON_ERROR_STOP=1 < "$backup" &&
+docker compose -p crew-restore run --rm -T --no-deps crew bun run admin invalidate-sessions &&
+docker compose -p crew-restore up -d crew
+```
+
+Für einen nativen Restore verwende `psql` mit denselben Optionen und der Verbindungsadresse der leeren Zieldatenbank. Beende alle aus dem Dump übernommenen Sitzungen mit `bun run admin invalidate-sessions`, bevor der Webdienst erreichbar wird. Prüfe die Anmeldung, Planung und stichprobenartig PDF-Nachweise. Führe zwischen Sicherung und Wiederanlauf erfolgte Profilbereinigungen erneut aus. [Profilbereinigung](personendaten.md)
+
+`bun scripts/check-restore.mjs` erzeugt in der CI und lokal synthetische Daten in getrennten Compose-Projekten. Die Probe prüft einen beschädigten Dump, den Wiederanlauf und den Sitzungswiderruf. Sie entfernt danach die Container und Volumes der Prüfprojekte.
+
+Für die Rückkehr zum letzten SQLite-Stand benötigst du dessen Anwendung sowie eine separate Kopie der Vorupdate-Sicherung. [Wechsel von SQLite zu PostgreSQL](migration.md#freigabe-und-rückweg)

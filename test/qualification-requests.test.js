@@ -1,33 +1,28 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import { test } from "node:test";
-import { openDatabase, passwordHash } from "../model.js";
-import { createApp } from "../server.js";
+import { submitQualification } from "../src/server/qualifications.ts";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
 
 test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehende Zusagen zur Prüfung", async t => {
-  const db = openDatabase(":memory:");
-  const origin = "http://localhost:8080";
+  const database = await createTestDatabase();
+  const db = database.pool;
+  t.after(database.close);
   const password = "synthetic-qualification-password";
-  const secret = passwordHash(password);
-  db.prepare(`INSERT INTO people (id,email,name,secret,role,status) VALUES
-    (1,'dispo@example.test','Dispo',?,'admin','active'),(2,'mira@example.test','Mira',?,'staff','active'),
-    (3,'leni@example.test','Leni',?,'staff','active')`).run(secret, secret, secret);
-  db.exec(`INSERT INTO qualifications (person,name,verified,evidence) VALUES (2,'funk',1,X'255044462D');
-    INSERT INTO events VALUES (1,'Stadtfest','Halle','', '',1);`);
-  const create = db.prepare(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
-    VALUES (?,1,?,'2099-01-01T10:00:00.000Z','2099-01-01T12:00:00.000Z',3,8000,?,'[]','pool')`);
-  create.run(1, "Bestätigte Schicht", JSON.stringify([{ name: "funk", timing: "assign" }]));
-  create.run(2, "Nur mit geprüfter Bewerbung", JSON.stringify([{ name: "funk", timing: "apply" }]));
-  create.run(3, "Zweite Auswahl", JSON.stringify([{ name: "funk", timing: "assign" }]));
-  db.exec("INSERT INTO responses (shift,person,status,answers) VALUES (1,2,'assigned','[]'),(3,2,'interested','[]')");
-  const app = createApp({ db, origin });
-  app.listen(0, "127.0.0.1");
-  await once(app, "listening");
-  t.after(async () => {
-    await new Promise(resolve => app.close(resolve));
-    db.close();
-  });
-  const base = `http://127.0.0.1:${app.address().port}`;
+  await seedPerson(db, "dispo@example.test", "Dispo", password, "admin");
+  await seedPerson(db, "mira@example.test", "Mira", password);
+  await seedPerson(db, "leni@example.test", "Leni", password);
+  await db.query(`INSERT INTO qualifications (id,person,name,verified,evidence) VALUES (1,2,'funk',1,decode('255044462D','hex'));
+    INSERT INTO events (id,title,location) VALUES (1,'Stadtfest','Halle');`);
+  const create = (id,title,requirements) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
+    VALUES ($1,1,$2,'2099-01-01T10:00:00.000Z','2099-01-01T12:00:00.000Z',3,8000,$3,'[]','pool')`, [id,title,requirements]);
+  await create(1, "Bestätigte Schicht", JSON.stringify([{ name: "funk", timing: "assign" }]));
+  await create(2, "Nur mit geprüfter Bewerbung", JSON.stringify([{ name: "funk", timing: "apply" }]));
+  await create(3, "Zweite Auswahl", JSON.stringify([{ name: "funk", timing: "assign" }]));
+  await db.query("INSERT INTO responses (shift,person,status,answers) VALUES (1,2,'assigned','[]'),(3,2,'interested','[]')");
+  const origin = "http://127.0.0.1:42693";
+  const base = origin;
+  const server = await startTestServer(database.url, origin);
+  t.after(() => stopTestServer(server));
   async function visit(path, cookie, data, expected = 200) {
     const response = await fetch(base + path, { method: data ? "POST" : "GET", redirect: "manual",
       headers: { origin, ...(cookie ? { Cookie: cookie } : {}) }, body: data && new URLSearchParams(data) });
@@ -50,11 +45,11 @@ test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehen
   await visit("/dispo/einteilen", admin, { shift: 3, person: 2, revision: 1 }, 422);
   assert.match((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise: funk/);
   assert.match((await visit("/", mira)).html, /Erwartete Vergütung<\/span><strong>80,00\s€/);
-  db.prepare("UPDATE shifts SET starts=? WHERE id=1").run(new Date(Date.now() - 3600000).toISOString());
+  await db.query("UPDATE shifts SET starts=$1 WHERE id=1", [new Date(Date.now() - 3600000).toISOString()]);
   assert.match((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise: funk/);
-  db.prepare("UPDATE shifts SET ends=? WHERE id=1").run(new Date(Date.now() - 10000).toISOString());
+  await db.query("UPDATE shifts SET ends=$1 WHERE id=1", [new Date(Date.now() - 10000).toISOString()]);
   assert.doesNotMatch((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise/);
-  db.exec("UPDATE shifts SET starts='2099-01-01T10:00:00.000Z',ends='2099-01-01T12:00:00.000Z' WHERE id=1");
+  await db.query("UPDATE shifts SET starts='2099-01-01T10:00:00.000Z',ends='2099-01-01T12:00:00.000Z' WHERE id=1");
   await visit("/qualifikation", mira, { name: "Funk" }, 303);
   assert.match((await visit("/", mira)).html, /In Prüfung[\s\S]+Bitte den neuen Nachweis/);
   await visit("/dispo/nachweis", admin, { qualification: 1, revision: 3 }, 303);
@@ -62,8 +57,7 @@ test("Widerruf und Nachforderung schützen neue Einteilungen und zeigen bestehen
   assert.match((await visit("/", mira)).html, /Erledigt[\s\S]+Bitte den neuen Nachweis/);
   assert.doesNotMatch((await visit("/dispo", admin)).html, /Besetzung prüfen\. Fehlende geprüfte Nachweise/);
 
-  const qualification = db.prepare("INSERT INTO qualifications (person,name) VALUES (2,?)");
-  for (let index = 1; index <= 28; index++) qualification.run(`synthetisch ${index}`);
+  for (let index = 1; index <= 28; index++) await submitQualification(db, 2, `synthetisch ${index}`, "", null);
   await visit("/dispo/nachforderung", admin, { ...requested, name: "Reserviert" }, 303);
   await visit("/qualifikation", mira, { name: "Anderes Thema" }, 422);
   await visit("/dispo/nachforderung", admin, { ...requested, name: "Kein Platz" }, 422);

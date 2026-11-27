@@ -2,3 +2,8 @@ data/
 build/
 .env
 node_modules/
+.output/
+.tanstack/
+public/dialogs.js
+public/pwa.js
+public/service-worker.js

@@ -2,7 +2,8 @@
   "files": {
     "includes": [
       "**/*.js", "**/*.mjs", "**/*.cjs", "**/*.jsx", "**/*.ts", "**/*.mts", "**/*.cts", "**/*.tsx",
-      "!test/**", "!tests/**", "!**/*.test.*", "!**/*.spec.*", "!scripts/check-browser.mjs"
+      "!test/**", "!tests/**", "!**/*.test.*", "!**/*.spec.*", "!scripts/check-browser.mjs",
+      "!.output/**", "!.tanstack/**", "!src/routeTree.gen.ts", "!public/dialogs.js", "!public/pwa.js", "!public/service-worker.js"
     ]
   },
   "formatter": { "enabled": false },

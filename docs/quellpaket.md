@@ -1,6 +1,6 @@
 # Quellpaket für Crew 0.1.0.0
 
-Die öffentliche Versionsnummer lautet 0.1.0.0 und steht als `crewVersion` in `package.json`. Der vorgesehene Tag lautet `v0.1.0.0`. Die interne npm-Version verwendet SemVer und lautet `0.1.0`. Für Crew wird kein npm-Paket veröffentlicht. Das Quellpaket beschreibt einen Git-Commit vollständig und enthält die [Lizenz](../LICENSE), [Installation](installation.md) und [Versionshinweise](../CHANGELOG.md).
+Die öffentliche Versionsnummer lautet 0.1.0.0 und steht als `crewVersion` in `package.json`. Der vorgesehene Tag lautet `v0.1.0.0`. Die interne Paketversion verwendet SemVer und lautet `0.1.0`. Für Crew wird kein npm-Paket veröffentlicht. Das Quellpaket beschreibt einen Git-Commit vollständig und enthält die [Lizenz](../LICENSE), [Installation](installation.md) und [Versionshinweise](../CHANGELOG.md).
 
 ## Vorbereitung im privaten Repository
 
@@ -12,7 +12,7 @@ In einem Checkout lässt sich das Paket auch mit Python 3.11 oder neuer erzeugen
 python3 scripts/package-release-source.py <vollständige-commit-id> build/release
 ```
 
-Im ausgegebenen Paketverzeichnis kontrollierst du die Prüfsumme mit `sha256sum --check SHA256SUMS`. Unter PowerShell vergleichst du `Get-FileHash -Algorithm SHA256` für das Archiv mit dem ersten Feld der Datei. Entpacke danach das geprüfte Archiv und folge der [Installation](installation.md). Die Laufzeit benötigt Node.js 24 ab 24.14 oder Docker Compose mit dem im Paket angegebenen Basisimage.
+Im ausgegebenen Paketverzeichnis kontrollierst du die Prüfsumme mit `sha256sum --check SHA256SUMS`. Unter PowerShell vergleichst du `Get-FileHash -Algorithm SHA256` für das Archiv mit dem ersten Feld der Datei. Entpacke danach das geprüfte Archiv und folge der [Installation](installation.md). Die Laufzeit benötigt Bun 1.4.5 und PostgreSQL 18. Docker Compose stellt beide Laufzeiten mit den im Paket angegebenen Images bereit.
 
 Der Packprozess übernimmt Dateien aus dem gewählten Git-Commit und vergleicht archivierte Dateien mit ihren Git-Blobs. Er basiert auf dem AGPL-3.0-only-Werkzeug aus Desk. [Desk-Quellpaketierung](https://github.com/Vemoro/desk/blob/00d01308b16c4d7d975f7c2224b1e213a6697d5e/scripts/package-release-source.py)
 

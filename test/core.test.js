@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
-import { missingQualifications, openDatabase, passwordHash } from "../model.js";
-import { createApp } from "../server.js";
+import { missingQualifications } from "../src/server/planning.ts";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
 
 function future(days) {
   const date = new Date();
@@ -14,20 +10,15 @@ function future(days) {
 }
 
 test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung", async t => {
-  const db = openDatabase(":memory:");
+  const database = await createTestDatabase();
+  const db = database.pool;
+  t.after(database.close);
   const password = "synthetic-test-password";
-  db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'admin','active')")
-    .run("dispo@example.test", "Dispo", passwordHash(password));
-  const origin = "http://localhost:8080";
-  const server = createApp({ db, origin });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  t.after(async () => {
-    server.close();
-    await once(server, "close");
-    db.close();
-  });
-  const base = `http://127.0.0.1:${server.address().port}`;
+  await seedPerson(db, "dispo@example.test", "Dispo", password, "admin");
+  const origin = "http://127.0.0.1:42691";
+  const base = origin;
+  const server = await startTestServer(database.url, origin);
+  t.after(() => stopTestServer(server));
   function client() {
     let session;
     return async (path, fields, status = 200, source = origin) => {
@@ -47,7 +38,7 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   const leni = client();
   const pending = client();
   await admin("/anmelden", { email: "dispo@example.test", password }, 303);
-  await mira("/registrieren", { email: "mira@example.test", name: "Mira <Nord>", availability: "Abends", password }, 303);
+  await mira("/registrieren", { email: "mira=abend@example.test", name: "Mira <Nord>", availability: "Abends", password }, 303);
   await leni("/registrieren", { email: "leni@example.test", name: "Leni Süd", password }, 303);
   await pending("/registrieren", { email: "offen@example.test", name: "Offen", password }, 303);
   assert.match(await mira("/"), /In Prüfung/);
@@ -138,62 +129,32 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
   const rejected = outcomes.find(outcome => outcome.status === "rejected");
   assert.match(rejected.reason.message, /Alle Plätze sind bereits besetzt/);
+  await addShift("Parallele Probe A", "60", 8, "14:00", "18:00");
+  await addShift("Parallele Probe B", "60", 8, "15:00", "18:00");
+  for (const shift of [4, 5]) {
+    await admin("/dispo/sichtbarkeit", { shift, visibility: "pool" }, 303);
+    await mira("/interesse", { shift }, 303);
+  }
+  const overlap = await Promise.allSettled([4, 5].map(shift => admin("/dispo/einteilen", { shift, person: 2, revision: 1 }, 303)));
+  assert.equal(overlap.filter(outcome => outcome.status === "fulfilled").length, 1);
+  assert.match(overlap.find(outcome => outcome.status === "rejected").reason.message, /zeitgleich/);
   await mira("/abmelden", {}, 303);
   await mira("/nachweis/1", undefined, 404);
   for (let count = 0; count < 9; count += 1) {
-    await mira("/anmelden", { email: "mira@example.test", password }, 303);
+    await mira("/anmelden", { email: "mira=abend@example.test", password }, 303);
     await mira("/abmelden", {}, 303);
   }
 });
 
-test("Ein bis zum Schichttag gültiger Nachweis reicht bis zum exklusiven Ende um Mitternacht", t => {
-  const db = openDatabase(":memory:");
-  t.after(() => db.close());
-  db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'staff','active')")
-    .run("mira@example.test", "Mira Nord", "synthetic");
-  db.prepare("INSERT INTO qualifications (person,name,valid_until,verified) VALUES (1,'aufbau','2030-01-02',1)").run();
+test("Ein bis zum Schichttag gültiger Nachweis reicht bis zum exklusiven Ende um Mitternacht", async t => {
+  const database = await createTestDatabase();
+  const db = database.pool;
+  t.after(database.close);
+  await seedPerson(db, "mira@example.test", "Mira Nord", "synthetic-midnight-password");
+  await db.query("INSERT INTO qualifications (id,person,name,valid_until,verified) VALUES (1,1,'aufbau','2030-01-02',1)");
   const requirements = JSON.stringify([{ name: "aufbau", timing: "assign" }]);
   const atMidnight = { requirements, ends: "2030-01-02T23:00:00.000Z" };
   const afterMidnight = { requirements, ends: "2030-01-02T23:01:00.000Z" };
-  assert.deepEqual(missingQualifications(db, atMidnight, 1, "assign", "Europe/Berlin"), []);
-  assert.deepEqual(missingQualifications(db, afterMidnight, 1, "assign", "Europe/Berlin"), ["aufbau"]);
-});
-
-test("Ein bestehender Datenbestand erhält Bewerbungsrevisionen ohne Datenverlust", t => {
-  const directory = mkdtempSync(join(tmpdir(), "crew-schema-test-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const path = join(directory, "crew.sqlite");
-  const original = openDatabase(path);
-  original.exec(`
-    ALTER TABLE responses DROP COLUMN revision;
-    ALTER TABLE people DROP COLUMN access_revision;
-    ALTER TABLE people DROP COLUMN access_suspended;
-    ALTER TABLE events DROP COLUMN revision;
-    ALTER TABLE shifts DROP COLUMN cancelled_at;
-    ALTER TABLE shifts DROP COLUMN locked_location;
-    ALTER TABLE shifts DROP COLUMN locked_instructions;
-    ALTER TABLE shifts DROP COLUMN placement_revision;
-    ALTER TABLE responses DROP COLUMN released_by_dispo;
-    DROP TABLE qualification_requests;
-    DROP TABLE erased_ids;
-    ALTER TABLE shifts DROP COLUMN anonymous_assigned;
-    PRAGMA user_version = 1;
-    INSERT INTO people (id,email,name,secret,role,status) VALUES (1,'mira@example.test','Mira','synthetic','staff','active');
-    INSERT INTO events (id,title,location) VALUES (1,'Stadtfest West','Musterhalle');
-    INSERT INTO shifts VALUES (1,1,'Aufbau','2030-01-02T13:00:00.000Z','2030-01-02T17:00:00.000Z',1,8000,'[]','[]','pool');
-    INSERT INTO responses (shift,person,status,answers) VALUES (1,1,'assigned','[]');
-  `);
-  original.close();
-  for (let run = 0; run < 2; run += 1) {
-    const migrated = openDatabase(path);
-    try {
-      const row = migrated.prepare("SELECT status, revision FROM responses WHERE shift=1 AND person=1").get();
-      assert.equal(row.status, "assigned");
-      assert.equal(row.revision, 1);
-      assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 6);
-      assert.equal(migrated.prepare("SELECT access_suspended FROM people WHERE id=1").get().access_suspended, 0);
-    } finally {
-      migrated.close();
-    }
-  }
+  assert.deepEqual(await missingQualifications(db, atMidnight, 1, "assign", "Europe/Berlin"), []);
+  assert.deepEqual(await missingQualifications(db, afterMidnight, 1, "assign", "Europe/Berlin"), ["aufbau"]);
 });
