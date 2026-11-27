@@ -18,10 +18,13 @@ function fixturePdf() {
 export async function checkEvidence(staff, show) {
   const submit = staff.getByRole("button", { name: "Qualifikation einreichen" });
   const name = staff.getByLabel("Bezeichnung", { exact: true });
-  const file = staff.getByLabel("Nachweis als PDF", { exact: false });
+  const file = staff.locator('.file-picker input[type="file"]');
+  const choose = staff.getByRole("button", { name: "Nachweis als PDF Datei wählen" });
   const contents = fixturePdf();
   await name.fill("Browsertest Nachweis");
-  await file.setInputFiles({ name: "browsertest.pdf", mimeType: "application/pdf", buffer: contents });
+  const [chooser] = await Promise.all([staff.waitForEvent("filechooser"), choose.click()]);
+  await chooser.setFiles({ name: "browsertest.pdf", mimeType: "application/pdf", buffer: contents });
+  await staff.getByRole("status").filter({ hasText: "browsertest.pdf" }).waitFor();
   await submit.click();
   const link = staff.getByRole("link", { name: "PDF herunterladen" });
   await link.waitFor();
@@ -33,12 +36,12 @@ export async function checkEvidence(staff, show) {
   await file.setInputFiles({ name: "keine-pdf.txt", mimeType: "text/plain", buffer: Buffer.from("Nur Text") });
   await submit.click();
   await staff.getByText("Erlaubt sind PDF-Dateien bis 2 MB.", { exact: true }).waitFor();
-  assert.equal(await file.getAttribute("aria-invalid"), "true");
-  assert.equal(await file.evaluate(node => node === document.activeElement), true);
-  assert.match(await file.evaluate(node => node.getAttribute("aria-describedby").split(" ")
+  assert.equal(await choose.getAttribute("aria-invalid"), "true");
+  assert.equal(await choose.evaluate(node => node === document.activeElement), true);
+  assert.match(await choose.evaluate(node => node.getAttribute("aria-describedby").split(" ")
     .map(id => document.getElementById(id).textContent).join(" ")), /Erlaubt sind PDF-Dateien bis 2 MB\./);
   assert.equal(await name.inputValue(), "Ungültige Browserdatei");
-  await show(staff, "pdf-formatfehler", false);
+  await show(staff, "pdf-formatfehler");
   await name.fill("Browsertest Nachweis");
   await file.setInputFiles({ name: "browsertest.pdf", mimeType: "application/pdf", buffer: contents });
   await submit.click();

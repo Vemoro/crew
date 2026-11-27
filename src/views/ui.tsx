@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { Person } from '../server/auth';
 import type { Shift } from '../server/planning';
 import type { Qualification, QualificationRequest } from '../server/qualifications';
+import { Sidebar } from './navigation';
 
 const labels = {
   pending: 'In Prüfung', active: 'Im Pool', rejected: 'Abgelehnt', interested: 'Interesse gemeldet',
@@ -38,7 +39,7 @@ export function Field({ title, hint, error, children }: {
   const id = useId();
   const description = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ');
   return <div className="field">
-    <label htmlFor={id}>{title}</label>
+    <label id={`${id}-label`} htmlFor={id}>{title}</label>
     {children({ id, 'aria-describedby': description || undefined, 'aria-invalid': error ? true : undefined })}
     {hint && <span className="muted" id={`${id}-hint`}>{hint}</span>}
     {error && <span className="field-error" id={`${id}-error`}>{error}</span>}
@@ -94,28 +95,17 @@ export function Requests({ entries }: { entries: QualificationRequest[] }) {
     <Status state={request.state}/><p className="preserve">{request.note}</p></li>)}</ul> : null;
 }
 
-type Link = [string, string];
-function navigation(user: Person | undefined, registrationOpen: boolean): Link[] {
-  if (user?.role === 'admin') return [['/dispo#personal','Personal'],['/dispo#einsaetze','Einsätze']];
-  if (user?.status === 'active') return [['/#schichten','Schichten'],['/#bewerbungen','Bewerbungen'],['/#profil','Profil']];
-  if (user) return [['/#bewerbungen','Bewerbung'],['/#profil','Profil']];
-  return registrationOpen ? [['/anmelden','Anmelden'],['/registrieren','Registrieren']] : [['/anmelden','Anmelden']];
-}
-
 export function page({ user, registrationOpen = true, title, children }: {
   user?: Person; registrationOpen?: boolean; title: string; children: ReactNode;
 }) {
-  const links = navigation(user, registrationOpen).map(([href, text]) => <a href={href} key={href}>{text}</a>);
   const document = <html lang="de"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>{`${title} · Crew`}</title><link rel="stylesheet" href="/crew.css"/><meta name="theme-color" content="#30231d"/>
     <link rel="manifest" href="/manifest.webmanifest"/><link rel="icon" type="image/svg+xml" href="/icon.svg"/>
     <link rel="apple-touch-icon" href="/icon-180.png"/><script src="/pwa.js" type="module"/>
     <script src="/dialogs.js" type="module"/></head><body>
-    <a href="#inhalt" className="skip">Zum Inhalt</a><header><div className="header-inner">
-      <a className="brand" href={user?.role === 'admin' ? '/dispo' : '/'}><img src="/icon.svg" alt="" width="28" height="28"/>Crew<span aria-hidden="true">.</span></a>
-      <nav className="desktop-nav" aria-label="Hauptnavigation">{links}</nav>
-      {user && <form method="post" action="/abmelden" className="sign-out"><Submit>Abmelden</Submit></form>}
-      <details className="mobile-nav"><summary>Menü</summary><nav aria-label="Hauptnavigation">{links}</nav></details>
-    </div></header><main id="inhalt" tabIndex={-1}>{children}</main></body></html>;
+    <a href="#inhalt" className="skip">Zum Inhalt</a><div className="workspace">
+      <Sidebar user={user} registrationOpen={registrationOpen}/>
+      <main id="inhalt" tabIndex={-1}>{children}</main>
+    </div></body></html>;
   return '<!doctype html>' + renderToStaticMarkup(document);
 }

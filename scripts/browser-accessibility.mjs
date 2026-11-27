@@ -13,6 +13,9 @@ export async function checkMobileNavigation(page, show) {
   const summary = menu.locator('summary');
   const profile = menu.getByRole('link', { name: 'Profil', includeHidden: true });
   await summary.click();
+  await menu.getByRole('group', { name: 'Einsatzplanung' }).getByRole('link', { name: 'Schichten' }).waitFor();
+  await menu.getByRole('group', { name: 'Personalportal' }).getByRole('link', { name: 'Aufgaben' }).waitFor();
+  await menu.getByRole('group', { name: 'Konto und Hilfe' }).getByRole('button', { name: 'Abmelden' }).waitFor();
   await show(page, 'navigation-handy-hell-offen', false);
   await page.emulateMedia({ colorScheme: 'dark' });
   await show(page, 'navigation-handy-dunkel-offen', false);
@@ -35,4 +38,5 @@ export async function checkMobileNavigation(page, show) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForFunction(() => document.activeElement?.matches('.desktop-nav a[href$="#profil"]'));
   await page.setViewportSize(viewport);
+  await page.waitForFunction(() => document.activeElement?.matches('.mobile-nav summary'));
 }

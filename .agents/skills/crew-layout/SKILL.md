@@ -5,7 +5,11 @@ description: Leitet Crew-Navigation, Seitenaufbau, Typografie und UI-Abnahme an 
 
 # Crew-Layout
 
-Lies die [Crew-Gestaltung](../../../DESIGN.md) und vergleiche die Aufgabe mit verwandten Ansichten. Verwende die gemeinsamen [Ansichten und Felder](../../../src/views/ui.tsx) und das [Stylesheet](../../../public/crew.css). Prüfe bei fehlenden Vorgaben den [Abgleich mit Desk und Haben](../../../docs/entwicklung.md#auftrag-und-arbeitsstand).
+Lies die [Crew-Gestaltung](../../../DESIGN.md) und vergleiche die Aufgabe mit verwandten Ansichten. Verwende die [Seitenleiste](../../../src/views/navigation.tsx), die gemeinsamen [Ansichten und Felder](../../../src/views/ui.tsx) und das [Stylesheet](../../../public/crew.css).
+
+## Neue Bereiche ohne passende Crew-Regel
+
+Prüfe vor einem neuen Layout ohne passende Crew-Vorgabe zuerst Habens `DESIGN.md` und eine passende bestehende Komponente oder Ansicht. Prüfe auch die entsprechende Desk-Vorgabe oder Umsetzung. Halte im PR den geprüften Git-Stand, das gefundene Muster und die Anpassung für Crew fest. Dokumentiere auch, wenn es kein passendes Vorbild gibt. [Abgleich mit Desk und Haben](../../../docs/entwicklung.md#auftrag-und-arbeitsstand)
 
 ## Umsetzung
 
