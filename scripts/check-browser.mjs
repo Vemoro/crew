@@ -247,16 +247,21 @@ try {
 
   const profile = admin.locator("#person-2");
   const profileToggle = profile.locator(":scope > details > summary");
+  async function openDetails(summary) {
+    const details = summary.locator("..");
+    if (await details.getAttribute("open") === null) await summary.press("Enter");
+    await details.and(admin.locator("details[open]")).waitFor();
+  }
   await staff.getByLabel("Bezeichnung", { exact: true }).fill("Funkeinweisung");
   await staff.getByRole("button", { name: "Qualifikation einreichen" }).click();
   await staff.getByText("funkeinweisung", { exact: true }).waitFor();
   await admin.reload();
-  await profileToggle.press("Enter");
+  await openDetails(profileToggle);
   const radioProof = profile.locator("li").filter({ has: admin.getByText("funkeinweisung", { exact: true }) });
   await radioProof.getByRole("button", { name: "Als geprüft markieren" }).press("Enter");
   const revoke = radioProof.getByRole("button", { name: "Prüfung zurücknehmen" });
   await radioProof.getByText("Geprüft", { exact: true }).waitFor({ state: "attached" });
-  await profileToggle.press("Enter");
+  await openDetails(profileToggle);
   await admin.setViewportSize({ width: 390, height: 844 });
   await revoke.press("Enter");
   const revokeDialog = admin.getByRole("dialog", { name: "Prüfung zurücknehmen?" });
@@ -269,17 +274,17 @@ try {
   await radioProof.getByText("Prüfung offen", { exact: true }).waitFor({ state: "attached" });
 
   const requestToggle = profile.locator("summary").filter({ hasText: /^Nachweis anfordern$/ });
-  await profileToggle.press("Enter");
+  await openDetails(profileToggle);
   await radioProof.getByText("Prüfung offen", { exact: true }).waitFor();
-  await requestToggle.press("Enter");
+  await openDetails(requestToggle);
   await profile.getByLabel("Bezeichnung (wie im Personalnachweis)").fill("Heben und Tragen");
   await profile.getByLabel("Anforderung für das Personalportal").fill("Bitte reiche den aktuellen Nachweis ein.");
   await admin.setViewportSize({ width: 390, height: 844 });
   await show(admin, "nachforderung-dispo-handy");
   await profile.getByRole("button", { name: "Nachweis anfordern", exact: true }).press("Enter");
   await profile.getByText("Nachweis angefordert", { exact: true }).waitFor({ state: "attached" });
-  await profileToggle.press("Enter");
-  await requestToggle.press("Enter");
+  await openDetails(profileToggle);
+  await openDetails(requestToggle);
   await profile.getByLabel("Bezeichnung (wie im Personalnachweis)").fill("Heben und Tragen");
   await profile.getByLabel("Anforderung für das Personalportal").fill("Doppelter Auftrag");
   await profile.getByRole("button", { name: "Nachweis anfordern", exact: true }).press("Enter");
