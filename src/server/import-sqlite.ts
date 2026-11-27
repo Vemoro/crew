@@ -60,6 +60,7 @@ export async function importSqlite(pool: Pool, path: string) {
       await ensureSchema(db);
       requireInput(!await first(db, `SELECT 1 WHERE EXISTS (SELECT 1 FROM sqlite_import)
         OR EXISTS (SELECT 1 FROM people) OR EXISTS (SELECT 1 FROM events)
+        OR EXISTS (SELECT 1 FROM auth_verifications)
         OR EXISTS (SELECT 1 FROM erased_ids WHERE greatest<>0)`), 'Der PostgreSQL-Zielbestand muss leer sein.');
       await copyPeople(source, db);
       for (const table of Object.keys(tables) as (keyof typeof tables)[]) await copyTable(source, db, table);

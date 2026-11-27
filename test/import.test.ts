@@ -62,6 +62,11 @@ test('SQLite-Import erhält Konten, Freigaben, Revisionen, Links, Zähler und PD
   assert.equal(imported.status, 0, imported.stderr);
   assert.deepEqual(readFileSync(path), original);
   await assert.rejects(importSqlite(target.pool, path), /Zielbestand muss leer sein/);
+  const occupied = await createTestDatabase();
+  t.after(occupied.close);
+  await occupied.pool.query(`INSERT INTO auth_verifications (identifier,value,"expiresAt") VALUES ('synthetic','synthetic',now())`);
+  await assert.rejects(importSqlite(occupied.pool, path), /Zielbestand muss leer sein/);
+  assert.deepEqual(await first(occupied.pool, 'SELECT count(*)::int AS count FROM people'), { count: 0 });
   assert.equal((await first<{ n: number }>(target.pool, 'SELECT count(*)::int AS n FROM auth_sessions'))?.n, 0);
   assert.deepEqual(await first(target.pool, 'SELECT status,revision,answers FROM responses WHERE shift=11 AND person=5'),
     { status: 'assigned', revision: 3, answers: '["Tor 4"]' });

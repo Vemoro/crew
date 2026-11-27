@@ -43,7 +43,7 @@ docker compose run --rm -e CREW_ADMIN_PASSWORD crew bun run admin reset-password
 unset CREW_ADMIN_PASSWORD
 ```
 
-Beim nativen Start verwende mit demselben Datenbankpfad `bun run admin reset-password personal@example.test`. Ein Passwortwechsel beendet die bestehenden Sitzungen. Wirksame Kontosperren bleiben bestehen.
+Bei nativer Installation verwende dieselbe PostgreSQL-Verbindung wie der Webdienst und führe `bun run admin reset-password personal@example.test` aus. Ein Passwortwechsel beendet die bestehenden Sitzungen. Wirksame Kontosperren bleiben bestehen.
 
 Für bestehende SQLite-Installationen gibt es einen Import mit Erhalt der Konten und Nachweise. [Wechsel von SQLite zu PostgreSQL](migration.md)
 
