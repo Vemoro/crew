@@ -8,7 +8,7 @@ Spätere Ausbaustufen sind Benachrichtigungen, Vorlagen, Zeitfreigaben, Abrechnu
 
 ## Board-Zustände
 
-Bis ein eigenes GitHub Project eingerichtet ist, halten die Issues den Arbeitsstand fest.
+Die [Crew Roadmap](https://github.com/orgs/Vemoro/projects/3/views/1) zeigt die Issues von Crew als Board. Anforderungen, Prüfnachweise und fachliche Entscheidungen stehen am verknüpften Issue.
 
 | Status | Bedingung |
 | --- | --- |

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="111" height="24" viewBox="0 0 111 24" role="img" aria-label="Betrieb Docker">
+  <clipPath id="shape"><rect width="111" height="24" rx="5"/></clipPath>
+  <g clip-path="url(#shape)"><rect width="111" height="24" fill="#2B211A"/><rect x="52" width="59" height="24" fill="#A9360B"/></g>
+  <g fill="#FFFFFF" font-family="IBM Plex Sans, Segoe UI, sans-serif" font-size="12" text-anchor="middle">
+    <text x="26" y="16">Betrieb</text><text x="81.5" y="16">Docker</text>
+  </g>
+</svg>
