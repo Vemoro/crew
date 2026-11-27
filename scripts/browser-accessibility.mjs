@@ -11,7 +11,7 @@ export async function checkAccessibility(page, state) {
 export async function checkMobileNavigation(page, show) {
   const menu = page.locator('.mobile-nav');
   const summary = menu.locator('summary');
-  const profile = menu.getByRole('link', { name: 'Profil' });
+  const profile = menu.getByRole('link', { name: 'Profil', includeHidden: true });
   await summary.click();
   await show(page, 'navigation-handy-offen', false);
   await profile.focus();
