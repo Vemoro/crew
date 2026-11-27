@@ -38,7 +38,7 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   const leni = client();
   const pending = client();
   await admin("/anmelden", { email: "dispo@example.test", password }, 303);
-  await mira("/registrieren", { email: "mira@example.test", name: "Mira <Nord>", availability: "Abends", password }, 303);
+  await mira("/registrieren", { email: "mira=abend@example.test", name: "Mira <Nord>", availability: "Abends", password }, 303);
   await leni("/registrieren", { email: "leni@example.test", name: "Leni Süd", password }, 303);
   await pending("/registrieren", { email: "offen@example.test", name: "Offen", password }, 303);
   assert.match(await mira("/"), /In Prüfung/);
@@ -129,13 +129,23 @@ test("Bewerbung, Einladungen, Voraussetzungen, Schichtbesetzung und Vergütung",
   assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
   const rejected = outcomes.find(outcome => outcome.status === "rejected");
   assert.match(rejected.reason.message, /Alle Plätze sind bereits besetzt/);
+  await addShift("Parallele Probe A", "60", 8, "14:00", "18:00");
+  await addShift("Parallele Probe B", "60", 8, "15:00", "18:00");
+  for (const shift of [4, 5]) {
+    await admin("/dispo/sichtbarkeit", { shift, visibility: "pool" }, 303);
+    await mira("/interesse", { shift }, 303);
+  }
+  const overlap = await Promise.allSettled([4, 5].map(shift => admin("/dispo/einteilen", { shift, person: 2, revision: 1 }, 303)));
+  assert.equal(overlap.filter(outcome => outcome.status === "fulfilled").length, 1);
+  assert.match(overlap.find(outcome => outcome.status === "rejected").reason.message, /zeitgleich/);
   await mira("/abmelden", {}, 303);
   await mira("/nachweis/1", undefined, 404);
   for (let count = 0; count < 9; count += 1) {
-    await mira("/anmelden", { email: "mira@example.test", password }, 303);
+    await mira("/anmelden", { email: "mira=abend@example.test", password }, 303);
     await mira("/abmelden", {}, 303);
   }
 });
+
 test("Ein bis zum Schichttag gültiger Nachweis reicht bis zum exklusiven Ende um Mitternacht", async t => {
   const database = await createTestDatabase();
   const db = database.pool;

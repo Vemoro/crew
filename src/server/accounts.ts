@@ -54,14 +54,17 @@ export function createAccountActions(pool: Pool, auth: CrewAuth, trustedProxy: s
   };
 
   async function signIn(db: Query, request: Request, email: string, password: string, prior?: string) {
-    const person = await first<Person>(db, 'SELECT * FROM people WHERE email=$1', [email]);
+    const person = await first<Person & { auth_email: string }>(db, `SELECT p.*,u.email AS auth_email
+      FROM people p JOIN auth_users u ON u.id=p.auth_id WHERE p.email=$1`, [email]);
     try {
       if (person?.access_suspended) {
         const credential = await first<{ password: string }>(db, `SELECT password FROM auth_accounts WHERE "userId"=$1 AND "providerId"='credential'`, [person.auth_id]);
         if (credential?.password) await verifyCredential(password, credential.password);
         throw new InputError(loginError);
       }
-      const result = await auth.api.signInEmail({ body: { email, password },
+      // Crew owns the contact address. Better Auth signs in a stable internal address so its validation cannot reject existing Crew contacts.
+      const authenticationEmail = person?.auth_email ?? '00000000-0000-0000-0000-000000000000@crew.invalid';
+      const result = await auth.api.signInEmail({ body: { email: authenticationEmail, password },
         headers: authenticationHeaders(request), returnHeaders: true });
       requireInput(person, loginError);
       await db.query('DELETE FROM auth_sessions WHERE "expiresAt"<=now() OR id=$1', [prior ?? null]);

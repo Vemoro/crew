@@ -59,7 +59,8 @@ INSERT INTO erased_ids VALUES ('people',0),('qualifications',0);
 CREATE TABLE sqlite_import (imported_at timestamptz PRIMARY KEY DEFAULT now());
 
 CREATE VIEW auth_users AS
-  SELECT auth_id AS id,email,name,false AS "emailVerified",NULL::text AS image,"createdAt","updatedAt" FROM people;
+  SELECT auth_id AS id,auth_id::text || '@crew.invalid' AS email,name,false AS "emailVerified",NULL::text AS image,
+    "createdAt","updatedAt" FROM people;
 CREATE TABLE auth_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), "userId" uuid NOT NULL REFERENCES people(auth_id) ON DELETE CASCADE,
   token text NOT NULL UNIQUE, "expiresAt" timestamptz NOT NULL,

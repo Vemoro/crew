@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { Database } from 'bun:sqlite';
 import { importSqlite } from '../src/server/import-sqlite';
@@ -21,7 +22,7 @@ test('SQLite-Import erhält Konten, Freigaben, Revisionen, Links, Zähler und PD
   const proof = Buffer.from('%PDF-1.4\nSynthetischer Inhalt\n%%EOF');
   const token = '7'.repeat(64);
   sqlite.query(`INSERT INTO people (id,email,name,secret,role,status,availability,access_suspended,access_revision)
-    VALUES (5,'mira@example.test','Mira Nord',?,'staff','active','Samstag',0,4),
+    VALUES (5,'mira=abend@example.test','Mira Nord',?,'staff','active','Samstag',0,4),
       (8,'dispo@example.test','Dispo',?,'admin','active','',0,1),
       (9,'gesperrt@example.test','Gesperrt',?,'staff','active','',1,3)`).run(hash, hash, hash);
   sqlite.exec(`INSERT INTO events (id,title,location,revision) VALUES (10,'Stadtfest','Halle',3);
@@ -35,10 +36,20 @@ test('SQLite-Import erhält Konten, Freigaben, Revisionen, Links, Zähler und PD
   sqlite.query('INSERT INTO sessions VALUES (?,5,?)').run(createHash('sha256').update(token).digest('hex'), Date.now() + 3600_000);
   sqlite.close();
 
-  const target = await createTestDatabase();
+  const target = await createTestDatabase({ initialize: false });
   t.after(target.close);
+  const importCommand = () => spawnSync(process.execPath, ['src/cli/migrate.ts', 'import-sqlite', path], {
+    env: { ...process.env, DATABASE_URL: target.url }, encoding: 'utf8',
+  });
+  const wrongVersion = new Database(path);
+  wrongVersion.exec('PRAGMA user_version=5');
+  wrongVersion.close();
+  const incompatible = importCommand();
+  assert.equal(incompatible.status, 1);
+  assert.match(incompatible.stderr, /Schema 6/);
+  assert.equal((await first<{ n: number }>(target.pool, 'SELECT count(*)::int AS n FROM people'))?.n, 0);
   const invalid = new Database(path);
-  invalid.exec("UPDATE people SET secret='invalid' WHERE id=9");
+  invalid.exec("PRAGMA user_version=6; UPDATE people SET secret='invalid' WHERE id=9");
   invalid.close();
   await assert.rejects(importSqlite(target.pool, path), /Passwortbestand/);
   assert.equal((await first<{ n: number }>(target.pool, 'SELECT count(*)::int AS n FROM people'))?.n, 0);
@@ -46,7 +57,8 @@ test('SQLite-Import erhält Konten, Freigaben, Revisionen, Links, Zähler und PD
   repair.query('UPDATE people SET secret=? WHERE id=9').run(hash);
   repair.close();
   const original = readFileSync(path);
-  await importSqlite(target.pool, path);
+  const imported = importCommand();
+  assert.equal(imported.status, 0, imported.stderr);
   assert.deepEqual(readFileSync(path), original);
   await assert.rejects(importSqlite(target.pool, path), /Zielbestand muss leer sein/);
   assert.equal((await first<{ n: number }>(target.pool, 'SELECT count(*)::int AS n FROM auth_sessions'))?.n, 0);
@@ -64,7 +76,7 @@ test('SQLite-Import erhält Konten, Freigaben, Revisionen, Links, Zähler und PD
   assert.equal((await login('gesperrt@example.test')).status, 422);
   assert.equal((await fetch(origin + '/nachweis/12', { headers: { cookie: `crew_session=${token}` } })).status, 404);
   assert.equal((await fetch(origin + '/api/auth/sign-up/email', { method: 'POST', headers: { origin } })).status, 404);
-  const mira = await login('mira@example.test');
+  const mira = await login('mira=abend@example.test');
   assert.equal(mira.status, 303);
   const cookie = mira.headers.getSetCookie()[0].split(';')[0];
   const result = await fetch(origin + '/nachweis/12', { headers: { cookie } });

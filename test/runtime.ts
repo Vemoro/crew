@@ -9,7 +9,7 @@ export async function seedPerson(db: Query, email: string, name: string, passwor
   return person;
 }
 
-export async function createTestDatabase() {
+export async function createTestDatabase({ initialize = true } = {}) {
   const base = process.env.CREW_TEST_DATABASE_URL;
   if (!base) throw new Error('CREW_TEST_DATABASE_URL muss auf eine PostgreSQL-Testinstanz zeigen.');
   const root = createPool(base);
@@ -23,7 +23,7 @@ export async function createTestDatabase() {
     try { await root.query(`DROP DATABASE ${name} WITH (FORCE)`); } finally { await root.end(); }
   };
   try {
-    await migrate(pool);
+    if (initialize) await migrate(pool);
     return { pool, url: target.href, close };
   } catch (error) {
     await close();

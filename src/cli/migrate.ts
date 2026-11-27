@@ -6,6 +6,7 @@ const [command, source] = Bun.argv.slice(2);
 const pool = createPool();
 try {
   if (command === 'import-sqlite' && source) {
+    await migrate(pool);
     await importSqlite(pool, source);
     console.log('SQLite-Bestand in PostgreSQL übernommen. Melde dich neu an.');
   } else if (!command) {

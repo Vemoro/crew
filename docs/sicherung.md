@@ -9,7 +9,7 @@ Die Befehle laufen im Projekt der vorhandenen Installation. Ergänze `-p`, wenn 
 ```sh
 umask 077
 docker compose exec -T postgres pg_dump -U crew -d crew --no-owner --no-acl \
-  > /geschuetzt/crew-sicherung.sql
+  > /geschuetzt/crew-sicherung.sql &&
 sha256sum /geschuetzt/crew-sicherung.sql > /geschuetzt/crew-sicherung.sql.sha256
 ```
 
@@ -20,10 +20,10 @@ Prüfe, dass der Dump erfolgreich erstellt wurde. Bei nativer Installation verwe
 Prüfe die SHA-256-Summe. Lege für das Ziel ein leeres PostgreSQL-Volume, passende Zugangsdaten und einen separaten Host-Port fest. Die Beispiele verwenden den Projektnamen `crew-restore`. Halte den Dienst bis nach der Abnahme für andere Nutzer unerreichbar.
 
 ```sh
-docker compose -p crew-restore up -d --wait postgres
+docker compose -p crew-restore up -d --wait postgres &&
 docker compose -p crew-restore exec -T postgres psql -X -U crew -d crew \
-  --single-transaction -v ON_ERROR_STOP=1 < /geschuetzt/crew-sicherung.sql
-docker compose -p crew-restore run --rm -T --no-deps crew bun run admin invalidate-sessions
+  --single-transaction -v ON_ERROR_STOP=1 < /geschuetzt/crew-sicherung.sql &&
+docker compose -p crew-restore run --rm -T --no-deps crew bun run admin invalidate-sessions &&
 docker compose -p crew-restore up -d crew
 ```
 
