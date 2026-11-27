@@ -14,6 +14,7 @@ Prüfe Auftrag und Zielbasis vor der Arbeit. Schütze fremde Änderungen und nut
 | Unabhängiges Code-Review | [crew-tdd-review](.agents/skills/crew-tdd-review/SKILL.md) |
 | Unabhängiges Doku-Review | [crew-doku-pruefen](.agents/skills/crew-doku-pruefen/SKILL.md) |
 | Lokale Prüfungen isoliert ausführen | [crew-checks](.agents/skills/crew-checks/SKILL.md) |
+| Navigation, Seitenaufbau, Typografie und Formulare umsetzen oder prüfen | [crew-layout](.agents/skills/crew-layout/SKILL.md) |
 | Vorher-Nachher-Aufnahmen vor der ersten UI-Änderung vorbereiten | [crew-pr-screenshots](.agents/skills/crew-pr-screenshots/SKILL.md) |
 | Offene und gestapelte PRs zur Entscheidung aufbereiten | [crew-prs-pruefen](.agents/skills/crew-prs-pruefen/SKILL.md) |
 

@@ -2,7 +2,7 @@ import type { Person } from '../server/auth';
 import { rows, type Query } from '../server/db';
 import { missingQualifications, shiftQuery, type CrewEvent, type Reply, type Requirement, type Shift } from '../server/planning';
 import { loadQualifications, loadRequests } from './staff';
-import { Alert, Box, Confirmation, Empty, Form, Hidden, Label, Qualifications, Requests, ShiftFacts, Status,
+import { Alert, Box, Confirmation, Empty, Form, Hidden, Field, Qualifications, Requests, ShiftFacts, Status,
   Submit, date, page, valueOf } from './ui';
 
 export interface Failure { message: string; form?: FormData; type?: 'event' | 'correction' | 'shift' | 'request'; event?: number; shift?: number; person?: number }
@@ -20,13 +20,13 @@ async function staffReview(db: Query, person: Staff, failure?: Failure) {
     <Qualifications entries={qualifications} admin/><Requests entries={requests}/>
     {person.status === 'active' && !suspended && <details open={Boolean(values)}><summary>Nachweis anfordern</summary>
       <Form action="/dispo/nachforderung"><Hidden name="person" value={person.id}/>
-        <Label title="Bezeichnung (wie im Personalnachweis)"><input name="name" maxLength={100} required defaultValue={valueOf(values,'name')}/></Label>
-        <Label title="Anforderung für das Personalportal"><textarea name="note" maxLength={1000} required defaultValue={valueOf(values,'note')}/></Label>
+        <Field title="Bezeichnung (wie im Personalnachweis)">{control => <input {...control} name="name" maxLength={100} required defaultValue={valueOf(values,'name')}/>}</Field>
+        <Field title="Anforderung für das Personalportal">{control => <textarea {...control} name="note" maxLength={1000} required defaultValue={valueOf(values,'note')}/>}</Field>
         <Submit>Nachweis anfordern</Submit></Form></details>}
     {person.status !== 'active' ? <Form action="/dispo/freigabe"><Hidden name="person" value={person.id}/>
-      <Label title="Rückmeldung an die Person (optional)"><textarea name="note" maxLength={1000}/></Label>
-      <Label title="Entscheidung"><select name="status"><option value="pending">In Prüfung belassen</option>
-        <option value="active">In den Pool aufnehmen</option><option value="rejected">Ablehnen</option></select></Label>
+      <Field title="Rückmeldung an die Person (optional)">{control => <textarea {...control} name="note" maxLength={1000}/>}</Field>
+      <Field title="Entscheidung">{control => <select {...control} name="status"><option value="pending">In Prüfung belassen</option>
+        <option value="active">In den Pool aufnehmen</option><option value="rejected">Ablehnen</option></select>}</Field>
       <Submit>Entscheidung speichern</Submit></Form>
       : <Confirmation id={`access-${person.id}`} title={accessTitle} toggle={accessTitle.slice(0,-1)} action="/dispo/kontozugang"
         submit={suspended ? 'Zugang freigeben' : 'Sperre bestätigen'} danger={!suspended}
@@ -41,15 +41,15 @@ function ShiftForm({ event, timezone, failure }: { event: CrewEvent; timezone: s
   const form = failure?.form;
   return <details open={Boolean(failure)}><summary>Schicht hinzufügen</summary><Alert message={failure?.message}/>
     <Form action="/dispo/schicht"><Hidden name="event" value={event.id}/>
-      <Label title="Schichtname"><input name="title" required maxLength={120} defaultValue={valueOf(form,'title')}/></Label>
-      <div className="form-grid"><Label title="Beginn"><input name="starts" type="datetime-local" required defaultValue={valueOf(form,'starts')}/></Label>
-        <Label title="Ende"><input name="ends" type="datetime-local" required defaultValue={valueOf(form,'ends')}/></Label></div>
+      <Field title="Schichtname">{control => <input {...control} name="title" required maxLength={120} defaultValue={valueOf(form,'title')}/>}</Field>
+      <div className="form-grid"><Field title="Beginn">{control => <input {...control} name="starts" type="datetime-local" required defaultValue={valueOf(form,'starts')}/>}</Field>
+        <Field title="Ende">{control => <input {...control} name="ends" type="datetime-local" required defaultValue={valueOf(form,'ends')}/>}</Field></div>
       <p className="muted">Zeitzone: {timezone}</p><div className="form-grid">
-        <Label title="Plätze"><input name="slots" type="number" min={1} max={999} required defaultValue={valueOf(form,'slots','1')}/></Label>
-        <Label title="Vergütung pro Person in Euro"><input name="pay" inputMode="decimal" maxLength={10} required defaultValue={valueOf(form,'pay')}/></Label></div>
-      <Label title="Vor Bewerbung nötig (eine Qualifikation pro Zeile)"><textarea name="apply" maxLength={2000} defaultValue={valueOf(form,'apply')}/></Label>
-      <Label title="Vor Einteilung nötig (eine Qualifikation pro Zeile)"><textarea name="assign" maxLength={2000} defaultValue={valueOf(form,'assign')}/></Label>
-      <Label title="Pflichtfragen (eine Frage pro Zeile)"><textarea name="questions" maxLength={2000} defaultValue={valueOf(form,'questions')}/></Label>
+        <Field title="Plätze">{control => <input {...control} name="slots" type="number" min={1} max={999} required defaultValue={valueOf(form,'slots','1')}/>}</Field>
+        <Field title="Vergütung pro Person in Euro">{control => <input {...control} name="pay" inputMode="decimal" maxLength={10} required defaultValue={valueOf(form,'pay')}/>}</Field></div>
+      <Field title="Vor Bewerbung nötig (eine Qualifikation pro Zeile)">{control => <textarea {...control} name="apply" maxLength={2000} defaultValue={valueOf(form,'apply')}/>}</Field>
+      <Field title="Vor Einteilung nötig (eine Qualifikation pro Zeile)">{control => <textarea {...control} name="assign" maxLength={2000} defaultValue={valueOf(form,'assign')}/>}</Field>
+      <Field title="Pflichtfragen (eine Frage pro Zeile)">{control => <textarea {...control} name="questions" maxLength={2000} defaultValue={valueOf(form,'questions')}/>}</Field>
       <Submit>Schichtentwurf speichern</Submit></Form></details>;
 }
 
@@ -60,8 +60,8 @@ function Correction({ event, shifts, timezone, failure }: { event: CrewEvent; sh
       : <p>Derzeit sind keine bevorstehenden Schichten betroffen.</p>}
     <p>Begonnene, vergangene und zurückgenommene Schichten behalten ihre bisherigen Angaben.</p>
     <Form action="/dispo/einsatz-korrigieren"><Hidden name="event" value={event.id}/><Hidden name="revision" value={event.revision}/>
-      <Label title="Korrigierter Ort"><input name="location" required maxLength={180} defaultValue={valueOf(form,'location',event.location)}/></Label>
-      <Label title="Korrigierter Treffpunkt und Hinweise"><textarea name="instructions" maxLength={2000} defaultValue={valueOf(form,'instructions',event.instructions)}/></Label>
+      <Field title="Korrigierter Ort">{control => <input {...control} name="location" required maxLength={180} defaultValue={valueOf(form,'location',event.location)}/>}</Field>
+      <Field title="Korrigierter Treffpunkt und Hinweise">{control => <textarea {...control} name="instructions" maxLength={2000} defaultValue={valueOf(form,'instructions',event.instructions)}/>}</Field>
       <Submit>Angaben aktualisieren</Submit></Form></details>;
 }
 
@@ -69,8 +69,8 @@ function Invitation({ shift, staff }: { shift: Shift; staff: Staff[] }) {
   const id = `invite-${shift.id}`;
   return <><div className="secondary"><button type="button" data-open-dialog={id}>Poolmitglied einladen</button></div>
     <dialog id={id} aria-labelledby={`${id}-title`}><h3 id={`${id}-title`}>Poolmitglied einladen</h3>
-      <Form action="/dispo/einladen"><Hidden name="shift" value={shift.id}/><Label title="Poolmitglied"><select name="person" autoFocus>
-        {staff.map(person => <option key={person.id} value={person.id}>{person.name} · {person.email}</option>)}</select></Label>
+      <Form action="/dispo/einladen"><Hidden name="shift" value={shift.id}/><Field title="Poolmitglied">{control => <select {...control} name="person" autoFocus>
+        {staff.map(person => <option key={person.id} value={person.id}>{person.name} · {person.email}</option>)}</select>}</Field>
         <div className="dialog-actions"><button className="quiet" type="submit" formMethod="dialog">Abbrechen</button><Submit>Einladung im Portal bereitstellen</Submit></div>
       </Form></dialog></>;
 }
@@ -116,7 +116,7 @@ async function planningShift(db: Query, shift: Shift, staff: Staff[], timezone: 
     <p><Status state={shift.cancelled_at ? 'cancelled' : shift.visibility}/></p><ShiftFacts shift={shift} timezone={timezone}/>
     {requirements.length > 0 && <p>{requirements.map(r => r.name + (r.timing === 'apply' ? ' (vor Bewerbung)' : ' (vor Einteilung)')).join(' · ')}</p>}
     {upcoming && shift.visibility === 'draft' && <Form action="/dispo/sichtbarkeit"><Hidden name="shift" value={shift.id}/>
-      <Label title="Veröffentlichen für"><select name="visibility"><option value="pool">Aktiver Pool</option><option value="invite">Nur eingeladene Personen</option></select></Label>
+      <Field title="Veröffentlichen für">{control => <select {...control} name="visibility"><option value="pool">Aktiver Pool</option><option value="invite">Nur eingeladene Personen</option></select>}</Field>
       <Submit>Schicht veröffentlichen</Submit></Form>}
     {shift.visibility === 'invite' && invited.length > 0 && <p>Eingeladen: {invited.map(person => person.name).join(', ')}</p>}
     {upcoming && <Confirmation id={`cancel-dispo-${shift.id}`} toggle="Schicht zurücknehmen" title="Schicht zurücknehmen?"
@@ -131,10 +131,10 @@ function NewEvent({ open, failure }: { open: boolean; failure?: Failure }) {
   const form = failure?.form;
   return <details id="neuer-einsatz" open={open}><summary>Einsatz anlegen</summary><Alert message={failure?.message}/>
     <Form action="/dispo/einsatz"><div className="form-grid">
-      <Label title="Einsatzname"><input name="title" required maxLength={120} defaultValue={valueOf(form,'title')}/></Label>
-      <Label title="Ort"><input name="location" required maxLength={180} defaultValue={valueOf(form,'location')}/></Label></div>
-      <Label title="Externe Referenz (optional)"><input name="reference" maxLength={250} defaultValue={valueOf(form,'reference')}/></Label>
-      <Label title="Treffpunkt und Hinweise für eingeteiltes Personal"><textarea name="instructions" maxLength={2000} defaultValue={valueOf(form,'instructions')}/></Label>
+      <Field title="Einsatzname">{control => <input {...control} name="title" required maxLength={120} defaultValue={valueOf(form,'title')}/>}</Field>
+      <Field title="Ort">{control => <input {...control} name="location" required maxLength={180} defaultValue={valueOf(form,'location')}/>}</Field></div>
+      <Field title="Externe Referenz (optional)">{control => <input {...control} name="reference" maxLength={250} defaultValue={valueOf(form,'reference')}/>}</Field>
+      <Field title="Treffpunkt und Hinweise für eingeteiltes Personal">{control => <textarea {...control} name="instructions" maxLength={2000} defaultValue={valueOf(form,'instructions')}/>}</Field>
       <Submit>Einsatz anlegen</Submit></Form></details>;
 }
 

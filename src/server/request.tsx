@@ -7,7 +7,7 @@ import { submitPlanning, submitStaff } from './actions';
 import { createAuth, type Person } from './auth';
 import { createPool, first, writeTransaction } from './db';
 import { readForm } from './forms';
-import { InputError, requireInput } from './inputs';
+import { EvidenceInputError, InputError, requireInput } from './inputs';
 import { webConfig } from './web-config';
 
 function recordId(value: unknown) {
@@ -53,7 +53,11 @@ export function createCrewHandler(pool: Pool, authPool: Pool, config: ReturnType
   const notice = (message: string, user?: Person) => page({ user, registrationOpen, title: 'Hinweis', children:
     <div className="narrow"><h1>Hinweis</h1><p role="alert">{message}</p><a href={user?.role === 'admin' ? '/dispo' : '/'}>Zur Übersicht</a></div> });
 
-  async function failure(path: string, message: string, user?: Person, form?: FormData) {
+  async function failure(path: string, error: InputError, user?: Person, form?: FormData) {
+    const { message } = error;
+    if (error instanceof EvidenceInputError && form && user?.role === 'staff') {
+      return staffHome(pool, user, timezone, { message, form });
+    }
     if (!user && ['/anmelden', '/registrieren'].includes(path)) return authView(path, registrationOpen, { message, form });
     if (user?.role === 'admin' && form) {
       const details = await adminFailure(pool, path, form, message);
@@ -124,7 +128,7 @@ export function createCrewHandler(pool: Pool, authPool: Pool, config: ReturnType
     } catch (error) {
       if (error instanceof InputError) {
         const current = await sessionOwner(pool, session);
-        return respond(await failure(path, error.message, current, form), 422);
+        return respond(await failure(path, error, current, form), 422);
       }
       console.error('Crew-Anfrage fehlgeschlagen.', error instanceof Error ? error.name : typeof error);
       return respond(notice('Die Anfrage konnte nicht abgeschlossen werden.'), 500);

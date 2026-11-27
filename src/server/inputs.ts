@@ -1,4 +1,5 @@
 export class InputError extends Error {}
+export class EvidenceInputError extends InputError {}
 
 export function requireInput(condition: unknown, message: string): asserts condition {
   if (!condition) throw new InputError(message);

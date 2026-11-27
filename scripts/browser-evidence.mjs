@@ -32,9 +32,17 @@ export async function checkEvidence(staff, show) {
   await name.fill("Ungültige Browserdatei");
   await file.setInputFiles({ name: "keine-pdf.txt", mimeType: "text/plain", buffer: Buffer.from("Nur Text") });
   await submit.click();
-  await staff.getByRole("alert").getByText("Erlaubt sind PDF-Dateien bis 2 MB.").waitFor();
+  await staff.getByText("Erlaubt sind PDF-Dateien bis 2 MB.", { exact: true }).waitFor();
+  assert.equal(await file.getAttribute("aria-invalid"), "true");
+  assert.equal(await file.evaluate(node => node === document.activeElement), true);
+  assert.match(await file.evaluate(node => node.getAttribute("aria-describedby").split(" ")
+    .map(id => document.getElementById(id).textContent).join(" ")), /Erlaubt sind PDF-Dateien bis 2 MB\./);
+  assert.equal(await name.inputValue(), "Ungültige Browserdatei");
   await show(staff, "pdf-formatfehler", false);
-  await staff.getByRole("link", { name: "Zur Übersicht" }).click();
+  await name.fill("Browsertest Nachweis");
+  await file.setInputFiles({ name: "browsertest.pdf", mimeType: "application/pdf", buffer: contents });
+  await submit.click();
+  await link.waitFor();
   assert.equal(await staff.getByText("ungültige browserdatei", { exact: true }).count(), 0);
   assert.equal(await link.count(), 1);
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Person } from '../server/auth';
 import type { Shift } from '../server/planning';
@@ -30,7 +30,20 @@ export function Box({ title, id, children }: { title: string; id?: string; child
 
 export function Empty({ children }: { children: ReactNode }) { return <p className="muted">{children}</p>; }
 export function Alert({ message }: { message?: string }) { return message ? <p className="form-error" role="alert">{message}</p> : null; }
-export function Label({ title, children }: { title: string; children: ReactNode }) { return <label><span>{title}</span>{children}</label>; }
+type FieldControl = { id: string; 'aria-describedby'?: string; 'aria-invalid'?: true };
+
+export function Field({ title, hint, error, children }: {
+  title: string; hint?: string; error?: string; children: (control: FieldControl) => ReactNode;
+}) {
+  const id = useId();
+  const description = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ');
+  return <div className="field">
+    <label htmlFor={id}>{title}</label>
+    {children({ id, 'aria-describedby': description || undefined, 'aria-invalid': error ? true : undefined })}
+    {hint && <span className="muted" id={`${id}-hint`}>{hint}</span>}
+    {error && <span className="field-error" id={`${id}-error`}>{error}</span>}
+  </div>;
+}
 export function Hidden({ name, value }: { name: string; value: string | number }) { return <input type="hidden" name={name} value={value}/>; }
 export function Submit({ children }: { children: ReactNode }) { return <button type="submit">{children}</button>; }
 export function Form({ action, secondary, multipart, children }: { action: string; secondary?: boolean; multipart?: boolean; children: ReactNode }) {
@@ -97,7 +110,7 @@ export function page({ user, registrationOpen = true, title, children }: {
     <title>{`${title} · Crew`}</title><link rel="stylesheet" href="/crew.css"/><meta name="theme-color" content="#30231d"/>
     <link rel="manifest" href="/manifest.webmanifest"/><link rel="icon" type="image/svg+xml" href="/icon.svg"/>
     <link rel="apple-touch-icon" href="/icon-180.png"/><script src="/pwa.js" type="module"/>
-    {user && <script src="/dialogs.js" type="module"/>}</head><body>
+    <script src="/dialogs.js" type="module"/></head><body>
     <a href="#inhalt" className="skip">Zum Inhalt</a><header><div className="header-inner">
       <a className="brand" href={user?.role === 'admin' ? '/dispo' : '/'}><img src="/icon.svg" alt="" width="28" height="28"/>Crew<span aria-hidden="true">.</span></a>
       <nav className="desktop-nav" aria-label="Hauptnavigation">{links}</nav>

@@ -6,7 +6,9 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "packageManager": "bun@1.4.5",
-  "engines": { "bun": "1.4.5" },
+  "engines": {
+    "bun": "1.4.5"
+  },
   "scripts": {
     "build:assets": "bun build src/client/dialogs.ts src/client/pwa.ts src/client/service-worker.ts --target=browser --outdir public",
     "build": "bun run build:assets && bun --bun vite build",
@@ -16,11 +18,13 @@
     "admin": "bun src/cli/admin.ts",
     "people": "bun src/cli/people.ts",
     "typecheck": "tsc --noEmit",
+    "check:fields": "bun scripts/check-fields.ts",
     "lint": "bun scripts/check-source.mjs && biome lint --diagnostic-level=info",
     "test": "bun test --timeout 30000 test",
     "test:browser": "bun scripts/check-browser.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.1",
     "@biomejs/biome": "2.6.8",
     "@types/bun": "1.4.5",
     "@types/pg": "8.23.1",
