@@ -19,7 +19,7 @@ jobs:
           node-version: '24'
       - name: Syntax prüfen
         run: |
-          for source in *.js test/*.js scripts/*.mjs; do
+          for source in *.js public/*.js test/*.js scripts/*.mjs; do
             node --check "$source"
           done
       - name: Crew prüfen

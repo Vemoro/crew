@@ -4,6 +4,10 @@
 
 Crew verwendet Orange für Markenakzent, Fokus, Links und Primäraktionen. Neutrale Arbeitsflächen und eine dunkle Kopfzeile geben den Inhalten Vorrang. Im dunklen Modus liegen die Flächen in neutralen Grautönen und der orange Akzent trägt dunkle Schrift. Fachzustände werden mit Text benannt und lassen sich ohne Farbe unterscheiden.
 
+Das Crew-Signet verbindet ein C mit einem quadratischen Akzent. Die Kopfleiste verwendet es zusammen mit dem sichtbaren Namen. Die App nutzt das Vektor-Signet und die daraus gerenderten Rastergrößen. Die helle und dunkle Wort-Bild-Marke sind für Projektdokumentation und Website vorgesehen. [Vektor-Signet](public/icon.svg) · [Logo hell](docs/marke/crew-logo-hell.svg) · [Logo dunkel](docs/marke/crew-logo-dunkel.svg)
+
+Installiere zum Erzeugen der Rasterdateien mit `npm ci` und `npx playwright install chromium` die Entwicklungswerkzeuge. Führe nach einer Änderung `node scripts/render-brand-icons.mjs` aus und prüfe die maskierbare Variante im Manifest.
+
 Crew orientiert sich an Habens Gestaltungsregeln. Definiere Farben zentral für Hell und Dunkel. Verwende neutrale Flächen, feine Trennlinien und sparsame Akzente. Abstände folgen einem 4-Pixel-Raster. `npm run lint` prüft feste Pixelwerte in `padding`, `margin` und `gap` einschließlich ihrer Varianten. Beschriftungen stehen in Satzschreibung. Beträge und Kennzahlen verwenden gleich breite Ziffern. [Gestaltung von Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/DESIGN.md)
 
 Verwende eine konsistente Icon-Komponente mit verständlichen Beschriftungen. Ein allein stehendes Symbol braucht einen zugänglichen Namen. Am Smartphone öffnet ein beschrifteter Menüknopf die Hauptnavigation. Der aktuelle Bereich bleibt erkennbar.

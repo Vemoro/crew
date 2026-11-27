@@ -73,3 +73,13 @@ Die Anmeldebegrenzung zählt Versuche getrennt pro Client-IP und pro Konto. Ohne
 Mit `CREW_REGISTRATION=paused` nimmt Crew keine neuen Selbstregistrierungen an. Übernimm die Änderung mit `docker compose up -d` oder starte den nativen Prozess mit dem neuen Wert. Bestehende Konten können sich weiter anmelden. Setze den Wert auf `open` und übernimm die Änderung auf demselben Weg, um den Bewerberzugang wieder zu öffnen.
 
 `node scripts/check-proxy.mjs` prüft den synthetischen HTTPS-Proxy, die abgeschaltete Registrierung und die Anmeldebegrenzung auf einem lokalen Prüfstand. Die Probe benötigt OpenSSL. Unter Windows kann `CREW_OPENSSL` auf dessen ausführbare Datei zeigen.
+
+## Crew als App installieren
+
+Öffne deine Crew-Instanz über HTTPS. Lokal funktioniert die Prüfung auch über `localhost` oder `127.0.0.1`. Nutze einen Browser mit Web-App-Installation.
+
+- **Chrome und Edge am Desktop:** Wähle das Installationssymbol in der Adressleiste oder den Eintrag für die App-Installation im Browsermenü.
+- **Chrome auf Android.** Öffne das Dreipunkt-Menü, wähle **Installieren und Verknüpfung erstellen** und dann **Installieren**. Je nach Chrome-Version ist der Einstieg als **Zum Startbildschirm hinzufügen** beschriftet. [Chrome-Hilfe](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=de-DE)
+- **Safari auf iPhone und iPad.** Öffne das Teilen-Menü und wähle **Zum Home-Bildschirm**. Aktiviere **Als Web-App öffnen**, wenn Safari die Option anbietet, und bestätige mit **Hinzufügen**. [Apple-Anleitung](https://support.apple.com/de-de/guide/iphone/iphea86e5236/ios)
+
+Crew öffnet sich im eigenen Fenster oder vom Startbildschirm. Anmeldung, Schichten, Nachweise und Formularübermittlungen brauchen eine Verbindung zu deiner Instanz. Wenn Crew vorher online geöffnet wurde und der Service Worker aktiv ist, zeigt die App beim nächsten Öffnen ohne Verbindung einen Hinweis. Crew speichert keine Inhalte im Offline-Cache und führt keine offline abgeschickten Änderungen nachträglich aus.

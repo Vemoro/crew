@@ -8,6 +8,7 @@ import { createApp } from "../server.js";
 import { openDatabase, passwordHash } from "../model.js";
 import { checkEvidence } from "./browser-evidence.mjs";
 import { checkMobilePlanning } from "./browser-mobile.mjs";
+import { checkDisconnection, checkInstallability } from "./browser-pwa.mjs";
 
 const engine = process.env.CREW_BROWSER_ENGINE || "chromium";
 const engines = { chromium, webkit };
@@ -32,6 +33,7 @@ try {
   const desktop = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
   const staff = await desktop.newPage();
   await staff.goto(origin + "/registrieren");
+  await checkInstallability(staff, origin, engine);
   if (engine === "webkit") await staff.getByRole("link", { name: "Zum Inhalt" }).focus();
   else await staff.keyboard.press("Tab");
   assert.equal(await staff.evaluate(() => document.activeElement.textContent), "Zum Inhalt");
@@ -121,8 +123,10 @@ try {
   await staff.reload();
   await staff.getByRole("heading", { name: "Stadtfest West · Abbau" }).waitFor();
   await show(staff, "personal-hell");
+  await show(staff, "readme-personal-hell", false);
   await staff.emulateMedia({ colorScheme: "dark" });
   await show(staff, "personal-dunkel");
+  await show(staff, "readme-personal-dunkel", false);
   await staffMobile.goto(origin);
   assert.ok(await staffMobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
   if (engine === "chromium") {
@@ -243,16 +247,21 @@ try {
 
   const profile = admin.locator("#person-2");
   const profileToggle = profile.locator(":scope > details > summary");
+  async function openDetails(summary) {
+    const details = summary.locator("..");
+    if (await details.getAttribute("open") === null) await summary.press("Enter");
+    await details.and(admin.locator("details[open]")).waitFor();
+  }
   await staff.getByLabel("Bezeichnung", { exact: true }).fill("Funkeinweisung");
   await staff.getByRole("button", { name: "Qualifikation einreichen" }).click();
   await staff.getByText("funkeinweisung", { exact: true }).waitFor();
   await admin.reload();
-  await profileToggle.press("Enter");
+  await openDetails(profileToggle);
   const radioProof = profile.locator("li").filter({ has: admin.getByText("funkeinweisung", { exact: true }) });
   await radioProof.getByRole("button", { name: "Als geprüft markieren" }).press("Enter");
   const revoke = radioProof.getByRole("button", { name: "Prüfung zurücknehmen" });
   await radioProof.getByText("Geprüft", { exact: true }).waitFor({ state: "attached" });
-  await profileToggle.press("Enter");
+  await openDetails(profileToggle);
   await admin.setViewportSize({ width: 390, height: 844 });
   await revoke.press("Enter");
   const revokeDialog = admin.getByRole("dialog", { name: "Prüfung zurücknehmen?" });
@@ -265,17 +274,17 @@ try {
   await radioProof.getByText("Prüfung offen", { exact: true }).waitFor({ state: "attached" });
 
   const requestToggle = profile.locator("summary").filter({ hasText: /^Nachweis anfordern$/ });
-  await profileToggle.press("Enter");
+  await openDetails(profileToggle);
   await radioProof.getByText("Prüfung offen", { exact: true }).waitFor();
-  await requestToggle.press("Enter");
+  await openDetails(requestToggle);
   await profile.getByLabel("Bezeichnung (wie im Personalnachweis)").fill("Heben und Tragen");
   await profile.getByLabel("Anforderung für das Personalportal").fill("Bitte reiche den aktuellen Nachweis ein.");
   await admin.setViewportSize({ width: 390, height: 844 });
   await show(admin, "nachforderung-dispo-handy");
   await profile.getByRole("button", { name: "Nachweis anfordern", exact: true }).press("Enter");
   await profile.getByText("Nachweis angefordert", { exact: true }).waitFor({ state: "attached" });
-  await profileToggle.press("Enter");
-  await requestToggle.press("Enter");
+  await openDetails(profileToggle);
+  await openDetails(requestToggle);
   await profile.getByLabel("Bezeichnung (wie im Personalnachweis)").fill("Heben und Tragen");
   await profile.getByLabel("Anforderung für das Personalportal").fill("Doppelter Auftrag");
   await profile.getByRole("button", { name: "Nachweis anfordern", exact: true }).press("Enter");
@@ -288,10 +297,19 @@ try {
   await staff.emulateMedia({ colorScheme: "dark" });
   await show(staff, "nachforderung-personal-handy-dunkel");
 
+  const availability = staff.getByLabel("Typische Verfügbarkeit oder Hinweis");
+  const originalAvailability = await availability.inputValue();
+  const writer = await desktop.newPage();
+  await writer.goto(origin);
+  await writer.getByLabel("Typische Verfügbarkeit oder Hinweis").fill("Darf offline nicht gespeichert werden");
   await new Promise(resolve => app.close(resolve));
+  await checkDisconnection(staff, writer, origin, show);
   runningApp = createApp({ db, origin, registrationOpen: false });
   runningApp.listen(port, "127.0.0.1");
   await once(runningApp, "listening");
+  await staff.getByRole("link", { name: "Crew erneut öffnen" }).click();
+  await staff.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
+  assert.equal(await availability.inputValue(), originalAvailability);
   const pausedPortal = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: "light", locale: "de-DE" });
   await pausedPortal.goto(origin + "/registrieren");
   await pausedPortal.getByText("Die Selbstregistrierung ist derzeit pausiert.", { exact: true }).waitFor();
@@ -306,7 +324,7 @@ try {
   await pausedPortal.getByRole("button", { name: "Anmelden", exact: true }).click();
   await pausedPortal.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
   await pausedPortal.close();
-  console.log("Browser: Kernablauf, PDF, schmale Dispo, Tastatur und pausierte Registrierung geprüft.");
+  console.log("Browser: Kernablauf, PDF, schmale Dispo, PWA, Verbindungsabbruch und pausierte Registrierung geprüft.");
 } finally {
   await browser.close();
   await new Promise(resolve => runningApp.close(resolve));

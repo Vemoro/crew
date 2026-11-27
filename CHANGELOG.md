@@ -13,3 +13,4 @@
 - Nachforderungen und Widerruf von Nachweisprüfungen ergänzt. Bestehende Zusagen mit Handlungsbedarf bleiben für die Dispo sichtbar.
 - Betreiber-Export und gezielte Bereinigung von Poolprofilen ergänzt. Historische Besetzungssummen bleiben erhalten.
 - Browserprüfungen für Chromium und WebKit mit PDF-Ablauf und schmalen Touch-Ansichten erweitert.
+- Orange Crew-Marke, App-Symbole und installierbare Web-App ergänzt. Bei fehlender Verbindung zeigt Crew einen Hinweis.

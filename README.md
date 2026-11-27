@@ -1,24 +1,75 @@
-# Crew
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/marke/crew-logo-dunkel.svg">
+  <img src="docs/marke/crew-logo-hell.svg" alt="Crew" width="206">
+</picture>
 
-Crew ist eine selbst gehostete Personalverwaltung für wechselnde Einsätze. Das Projekt verbindet Bewerbung, Personalpool, Schichtbesetzung und Personalportal. Crew ergänzt bei Bedarf Desk und Haben.
+# Schichten aus dem Personalpool besetzen
 
-Das Projekt wird für die öffentliche Auslieferung ab Version 0.1.0.0 vorbereitet und steht unter AGPL-3.0-only.
+**Crew ist die selbst gehostete Personalplanung für Teams mit wechselnden Einsätzen.** Die Dispo nimmt Personal in den Pool auf, prüft Qualifikationen und besetzt Schichten. Poolmitglieder sehen ihre Angebote, Zusagen und erwartete Vergütung im eigenen Portal. Crew lässt sich aus einem unterstützten Browser als App installieren.
 
-## Kernablauf
+[Lizenz AGPL-3.0-only](LICENSE) · [Installation und Betrieb](docs/installation.md) · [Roadmap](docs/roadmap.md)
 
-1. Personal bewirbt sich, gibt Verfügbarkeiten an und reicht Qualifikationen ein. Die Dispo prüft Bewerbung und Nachweise getrennt.
-2. Die Dispo legt Einsätze mit einer oder mehreren Schichten an. Ein Entwurf wird für den Pool veröffentlicht oder per Einladung angeboten.
-3. Personal meldet Interesse und beantwortet Pflichtfragen. Die Dispo sieht Rückmeldungen und besetzt freie Plätze verbindlich.
-4. Das Portal zeigt bestätigte Schichten, offene Nachweise und erwartete Vergütung. Absagen machen Plätze für die Nachbesetzung frei.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/ansichten/personalportal-dunkel.png">
+  <img src="docs/ansichten/personalportal-hell.png" alt="Crew-Personalportal mit bestätigter Aufbauschicht, erwartetem Betrag von 80 Euro und Einladung zum Abbau eines Mustereinsatzes" width="960">
+</picture>
 
-Die Dispo kann Ort und Hinweise für zukünftige Schichten korrigieren, einzelne bestätigte Plätze wieder freigeben oder eine bevorstehende Schicht vollständig zurücknehmen. Vor einer Korrektur zeigt das Formular die betroffenen Schichten. Bereits begonnene, vergangene und zurückgenommene Schichten behalten ihre bisherigen Angaben. Änderungen an Zeit, Vergütung und Voraussetzungen benötigen eine neue Schicht.
+[Einsatzablauf](#so-läuft-ein-einsatz) · [Funktionen](#funktionen) · [Schnellstart](#schnellstart) · [FAQ](#häufige-fragen)
 
-Die Dispo kann Prüfungen von Qualifikationen nach Bestätigung zurücknehmen und Nachweise als Aufgabe nachfordern. Eine Nachforderung für eine neue Qualifikation reserviert einen der bis zu 30 Plätze des Profils. Bereits bestätigte Plätze bleiben reserviert. Die Dispo sieht, wenn sie eine solche Besetzung wegen fehlender Nachweise erneut prüfen muss.
+## So läuft ein Einsatz
 
-Der erste Stand unterstützt pauschale Schichtvergütung und externe Einsatzreferenzen. Schnittstellen zu Desk und Haben, Ist-Zeiten, Abrechnungsbelege und Urlaub sind spätere Ausbaustufen.
+Beim fiktiven **Stadtfest West** organisiert die Dispo den Aufbau am Nachmittag und den Abbau am Abend. Die Aufbauschicht wird dem aktiven Pool angeboten. Für den Abbau werden ausgewählte Poolmitglieder eingeladen. Mira bestätigt ihr Interesse, beantwortet die Frage zum Treffpunkt und sieht nach ihrer Einteilung die Aufbauschicht mit 80 € erwarteter Vergütung im Portal.
+
+1. **Personal aufnehmen.** Bewerbungen erfassen Angaben zur Verfügbarkeit und zu Qualifikationen. Die Dispo entscheidet über die Aufnahme und prüft eingereichte Nachweise getrennt.
+2. **Schichten ausschreiben.** Die Dispo legt Zeiten, Ort, Plätze und Voraussetzungen fest. Ein Schichtentwurf wird für den Pool veröffentlicht oder für eingeladene Personen freigegeben.
+3. **Verbindlich einteilen.** Interessierte beantworten bei Bedarf Pflichtfragen. Crew prüft die Anforderungen und verhindert zeitliche Überschneidungen sowie Überbuchungen.
+4. **Änderungen koordinieren.** Die Dispo korrigiert Ort und Hinweise, gibt einzelne Plätze frei oder nimmt eine bevorstehende Schicht zurück. Poolmitglieder sehen im Portal, was sich an ihren Einsätzen und der erwarteten Vergütung geändert hat.
+
+[Durchgespielter Musterfall](scripts/check-browser.mjs)
+
+## Funktionen
+
+| Bereich | Was du in Crew erledigst |
+| --- | --- |
+| **Bewerbung und Pool** | Grunddaten und typische Verfügbarkeit erfassen. Bewerbungen prüfen, Personen aufnehmen und Kontozugänge bei Bedarf sperren oder wieder freigeben. |
+| **Nachweise und Aufgaben** | Qualifikationen und PDF-Nachweise einreichen, prüfen, erneut anfordern und Prüfungen zurücknehmen. |
+| **Disposition** | Einsätze mit mehreren Schichten planen, schichtbezogene Fragen festlegen, Plätze verbindlich besetzen und Änderungen bearbeiten. |
+| **Personalportal** | Offene und eingeladene Schichten sehen, Interesse melden, Zusagen einsehen, Nachweise einreichen und eigene Einteilungen absagen. |
+| **Vergütung** | Pauschalen je Schicht hinterlegen und die Summe der erwarteten Vergütung aus bestätigten Schichten anzeigen. |
+| **Betrieb** | Crew mit Docker Compose oder Node.js betreiben, SQLite-Bestände sichern und wiederherstellen sowie einzelne Poolprofile exportieren und bereinigen. |
+
+Crew läuft eigenständig und kann externe Einsatzreferenzen aufnehmen. Schnittstellen zu Desk und Haben, Ist-Zeiten, Abrechnungsbelege, Urlaub und Benachrichtigungen sind spätere Ausbaustufen. [Roadmap](docs/roadmap.md)
 
 ## Schnellstart
 
-Mit Node.js 24 ab 24.14 oder Docker Compose. Die Startanleitung beschreibt beide Wege und die Anlage des Dispo-Kontos. [Installation](docs/installation.md)
+Starte im ausgepackten Quellstand oder Checkout. Das Beispiel nutzt Bash und Docker Compose. Wähle ein eigenes Passwort mit 12 bis 128 Zeichen ohne Zeilenumbruch. Für einen lokalen Test genügen synthetische Personen und Schichten.
 
-[Roadmap](docs/roadmap.md) · [Mitwirken](CONTRIBUTING.md) · [Entwicklung](docs/entwicklung.md) · [Sicherheitsmeldungen](SECURITY.md) · [Lizenz](LICENSE)
+```sh
+docker compose build
+read -r -s -p 'Passwort für die Dispo eingeben: ' CREW_ADMIN_PASSWORD
+printf '\n'
+export CREW_ADMIN_PASSWORD
+docker compose run --rm -e CREW_ADMIN_PASSWORD crew node admin.js dispo@example.test "Crew Dispo"
+unset CREW_ADMIN_PASSWORD
+docker compose up -d
+```
+
+Öffne `http://localhost:8080` und melde dich als Dispo an. Registriere in einem zweiten Browserprofil eine synthetische Person, nimm sie in den Pool auf und besetze mit ihr die erste Schicht. [Nativer Start, HTTPS und App-Installation](docs/installation.md) · [Sicherung](docs/sicherung.md) · [Personendaten](docs/personendaten.md)
+
+## Häufige Fragen
+
+**Eignet sich Crew für unterschiedliche Veranstaltungen und Einsatzorte?**
+
+Ja. Du legst pro Einsatz Ort und Hinweise sowie mehrere Schichten über den jeweiligen Planungszeitraum an. Je Schicht bestimmst du Sichtbarkeit, Platzanzahl und erforderliche Qualifikationen.
+
+**Kann ich Crew vom Startbildschirm öffnen?**
+
+Ja. Unterstützte Browser installieren Crew als Web-App. Das Personalportal und die Dispo arbeiten bei bestehender Verbindung zur eigenen Crew-Instanz. [Crew als App installieren](docs/installation.md#crew-als-app-installieren)
+
+**Was bedeutet der Vergütungsbetrag im Personalportal?**
+
+Er ist die Summe der hinterlegten Pauschalen für bestätigte Schichten, die noch nicht beendet sind. Mit einer Absage oder Platzfreigabe ändert sich die Erwartung. Abrechnung und Lohnlauf erfolgen außerhalb von Crew.
+
+## Mitwirken
+
+Crew steht unter der AGPL-3.0-only. Fehlerberichte, Vorschläge und Beiträge sind willkommen. [Mitwirken](CONTRIBUTING.md) · [Entwicklungsregeln](docs/entwicklung.md) · [Sicherheitsmeldungen](SECURITY.md) · [Versionshinweise](CHANGELOG.md) · [Lizenz](LICENSE)

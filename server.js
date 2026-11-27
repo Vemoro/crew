@@ -1,5 +1,4 @@
 import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
@@ -10,11 +9,10 @@ import { render, renderEvidence, renderShift } from "./views.js";
 import { clientAddress, webConfig } from "./web-config.js";
 import { cancelShift, correctEvent, inviteToShift, releasePlace } from "./planning.js";
 import { requestQualification, reviewQualification, submitQualification } from "./qualifications.js";
+import { sendAsset } from "./web-assets.js";
 
 const lifetime = 12 * 60 * 60;
 const maxBody = 2_200_000;
-const css = readFileSync(new URL("./crew.css", import.meta.url));
-const dialogs = readFileSync(new URL("./dialogs.js", import.meta.url));
 const dummyPassword = passwordHash("crew-nonexistent-account");
 
 function field(form, key, max, required = true) {
@@ -314,7 +312,7 @@ export function createApp({ db, origin, trustedProxy = "", registrationOpen = tr
   return createServer({ requestTimeout: 30_000 }, async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
-    res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; worker-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
     res.setHeader("Cache-Control", "no-store");
     if (secure) res.setHeader("Strict-Transport-Security", "max-age=31536000");
     const token = /(?:^|;\s*)crew_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie ?? "")?.[1];
@@ -323,12 +321,7 @@ export function createApp({ db, origin, trustedProxy = "", registrationOpen = tr
     let form;
     try {
       path = new URL(req.url, origin).pathname;
-      if (req.method === "GET" && path === "/crew.css") {
-        return res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" }).end(css);
-      }
-      if (req.method === "GET" && path === "/dialogs.js") {
-        return res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" }).end(dialogs);
-      }
+      if (sendAsset(req, res, path)) return;
       if (req.method === "GET" && path === "/ready") {
         db.prepare("SELECT 1 FROM people LIMIT 1").get();
         return res.writeHead(200, { "Content-Type": "text/plain" }).end("OK");
