@@ -101,7 +101,7 @@ Ja. Betreiber können die Selbstregistrierung in der Konfiguration pausieren. Vo
 
 **Kann ich Crew als App nutzen?**
 
-Ja. Öffne deine Instanz über HTTPS in einem unterstützten Browser und installiere die Web-App. Schichten, Nachweise, Anmeldung und Formularübermittlungen brauchen eine Verbindung zur Instanz. Bei Verbindungsabbruch zeigt die zuvor geladene App einen Offline-Hinweis. [Installationswege für Desktop und Smartphone](docs/installation.md#crew-als-app-installieren)
+Ja. Öffne deine Instanz über HTTPS in einem unterstützten Browser und installiere die Web-App. Schichten, Nachweise, Anmeldung und Formularübermittlungen brauchen eine Verbindung zur Instanz. Beim nächsten Öffnen ohne Verbindung erscheint ein Hinweis, wenn Crew zuvor online geöffnet wurde und der Service Worker aktiv ist. [Installationswege für Desktop und Smartphone](docs/installation.md#crew-als-app-installieren)
 
 **Wie berechnet Crew die erwartete Vergütung?**
 
