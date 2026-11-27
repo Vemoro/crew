@@ -10,7 +10,7 @@ Lies die [Crew-Gestaltung](../../../DESIGN.md) und vergleiche die Aufgabe mit ve
 ## Umsetzung
 
 - Beginne mit dem aktuellen Arbeitsstand für die Rolle. Halte Hauptaktionen, Detailkontext und seltene Nebenaktionen an vergleichbaren Stellen. Auf kleinen Ansichten folgt der Kontext im Lesefluss. Verwende vorhandene Muster für Karten, Zustände, Formulare und Dialoge.
-- Prüfe die Navigation im offenen Handymenü. Escape bringt den Fokus zum Auslöser zurück. Ein interner Sprung schließt das Menü und führt den Fokus zum Hauptinhalt. Prüfe aktive Ansicht, Rollen, verständliche Namen und Touchziele.
+- Prüfe die Navigation im offenen Handymenü. Escape bringt den Fokus zum Auslöser zurück. Ein interner Sprung schließt das Menü und fokussiert den angesprungenen Abschnitt. Prüfe den nächsten Tabstopp, den Fokuswechsel beim Wechsel zum Desktop sowie aktive Ansicht, Rollen, verständliche Namen und Touchziele.
 - Prüfe bei neuen Feldern Namen, getrennte Hinweise und Fehlermeldungen. Verwende `bun run check:fields` und die einschlägige [Browserprüfung](../../../docs/entwicklung.md#prüfungen-und-dokumentation).
 
 ## Abnahme

@@ -73,3 +73,7 @@ Bewahre Titel und Aktionsbereich beim Scrollen gut erreichbar. Prüfe Dialoge mi
 Prüfe die Änderung mit Tastatur sowie auf der betroffenen Bildschirmgröße. Neue Ansichten erhalten einen Browserfall, der Erreichbarkeit und wesentliche Bedienung abdeckt. Prüfe zugängliche Namen, Reihenfolge und Dialogfokus nach WCAG 2.2 AA, Hell und Dunkel sowie bei mobiler Bedienung auf dem Smartphone. Warte im Browser auf den beobachteten Zustand. Bei Änderungen am Aussehen gehören reproduzierbare Vergleichsbilder ins Review. Der [Screenshot-Ablauf](.agents/skills/crew-pr-screenshots/SKILL.md) beschreibt die Aufnahme.
 
 `bun run check:fields` prüft `Field` und die Weitergabe seiner Attribute. Chromium prüft ausgewählte Anmeldungs-, Personal-, Dispo-, Menü-, Dialog- und Fehlerzustände mit Axe. Der Lauf ergänzt die Sicht- und Tastaturprüfung. Prüfe bei Formularänderungen zusätzlich den Zugang zum ersten Fehler und seine Behebung. [Crew-Layout](.agents/skills/crew-layout/SKILL.md)
+
+## Bestehende Abweichungen
+
+Der PDF-Formatfehler im Personalprofil wird dem Dateifeld zugeordnet und setzt dort den Fokus. Bei bestehenden Einsatz- und Schichtformularen stehen serverseitige Meldungen am betroffenen Abschnitt. Migriere bei Änderungen am jeweiligen Formular eindeutig zuordenbare Eingabefehler zum Feld. Fehler zu Rollen, parallelen Änderungen oder zum ganzen Vorgang bleiben am zugehörigen Formular oder Abschnitt.
