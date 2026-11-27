@@ -25,7 +25,7 @@ Beim fiktiven **Stadtfest West** organisiert die Dispo den Aufbau am Nachmittag 
 3. **Verbindlich einteilen.** Interessierte beantworten bei Bedarf Pflichtfragen. Crew prüft die Anforderungen und verhindert zeitliche Überschneidungen sowie Überbuchungen.
 4. **Änderungen koordinieren.** Die Dispo korrigiert Ort und Hinweise, gibt einzelne Plätze frei oder nimmt eine bevorstehende Schicht zurück. Poolmitglieder sehen im Portal, was sich an ihren Einsätzen und der erwarteten Vergütung geändert hat.
 
-[Durchgespielter Musterfall](scripts/check-browser.mjs)
+[Durchgespielter Musterfall](scripts/check-browser.ts)
 
 ## Funktionen
 

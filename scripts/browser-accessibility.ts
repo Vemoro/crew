@@ -1,14 +1,16 @@
+import type { Page } from "playwright";
+import type { ShowScreenshot } from "./check-browser";
 import assert from 'node:assert/strict';
 import AxeBuilder from '@axe-core/playwright';
 
-export async function checkAccessibility(page, state) {
+export async function checkAccessibility(page: Page, state: string) {
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
   const findings = violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) }));
   assert.deepEqual(findings, [], `Axe · ${state}`);
 }
 
-export async function checkMobileNavigation(page, show) {
+export async function checkMobileNavigation(page: Page, show: ShowScreenshot) {
   const menu = page.locator('.mobile-nav');
   const summary = menu.locator('summary');
   const profile = menu.getByRole('link', { name: 'Profil', includeHidden: true });
@@ -35,6 +37,7 @@ export async function checkMobileNavigation(page, show) {
   await summary.click();
   await profile.focus();
   const viewport = page.viewportSize();
+  assert.ok(viewport);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForFunction(() => document.activeElement?.matches('.desktop-nav a[href$="#profil"]'));
   await page.setViewportSize(viewport);

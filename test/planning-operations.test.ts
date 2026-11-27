@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { shiftQuery } from "../src/server/planning.ts";
-import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
+import { shiftQuery } from "../src/server/planning";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson, encodeForm, type FormRequest } from "./runtime";
 
 test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz und nimmt die Schicht zurück", async t => {
   const database = await createTestDatabase();
@@ -13,9 +13,9 @@ test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz un
   await seedPerson(db, "leni@example.test", "Leni", password);
   await seedPerson(db, "andi@example.test", "Andi", password);
   await db.query("INSERT INTO events (id,title,location,instructions) VALUES (1,'Stadtfest','Alte Halle','Tor 1')");
-  const slot = (id, title, starts, ends, cents) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
+  const slot = (id: number, title: string, starts: string, ends: string, cents: number) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
     VALUES ($1,1,$2,$3,$4,1,$5,'[]','[]','invite')`, [id,title,starts,ends,cents]);
-  const at = hours => new Date(Date.now() + hours * 3600000).toISOString();
+  const at = (hours: number) => new Date(Date.now() + hours * 3600000).toISOString();
   await slot(1, "Aufbau", at(24), at(25), 8000);
   await slot(2, "Abbau", at(25), at(26), 4500);
   await slot(3, "Vorbereitung", at(-3), at(-2), 0);
@@ -26,14 +26,14 @@ test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz un
   const base = origin;
   const server = await startTestServer(database.url, origin);
   t.after(() => stopTestServer(server));
-  async function visit(path, { cookie, data, expected = 200 } = {}) {
+  async function visit(path: string, { cookie, data, expected = 200 }: FormRequest = {}) {
     const response = await fetch(base + path, { method: data ? "POST" : "GET", redirect: "manual",
-      headers: { origin, ...(cookie ? { Cookie: cookie } : {}) }, body: data && new URLSearchParams(data) });
+      headers: { origin, ...(cookie ? { Cookie: cookie } : {}) }, body: data && encodeForm(data) });
     const body = await response.text();
     assert.equal(response.status, expected, `${path}: ${body}`);
     return { body, cookie: response.headers.get("set-cookie")?.split(";")[0] };
   }
-  async function login(email) {
+  async function login(email: string) {
     return (await visit("/anmelden", { data: { email, password }, expected: 303 })).cookie;
   }
   const admin = await login("dispo@example.test");
@@ -47,8 +47,8 @@ test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz un
   assert.match(staleCorrection.body, /Zur Korrektur mit der Fehlermeldung/);
   assert.match(staleCorrection.body, /<li>Aufbau ·[^<]+<\/li><li>Abbau ·[^<]+<\/li>/);
   assert.doesNotMatch(staleCorrection.body, /<li>(Vorbereitung|Einlass) ·/);
-  const byId = async id => (await db.query(shiftQuery + " WHERE s.id=$1", [id])).rows[0];
-  assert.deepEqual(await Promise.all([1, 2, 3, 4].map(async id => (await byId(id)).location)), ["Neue Halle", "Neue Halle", "Alte Halle", "Alte Halle"]);
+  const byId = async (id: number) => (await db.query(shiftQuery + " WHERE s.id=$1", [id])).rows[0];
+  assert.deepEqual(await Promise.all([1, 2, 3, 4].map(async (id: number) => (await byId(id)).location)), ["Neue Halle", "Neue Halle", "Alte Halle", "Alte Halle"]);
   assert.match((await visit("/", { cookie: mira })).body, /Tor 4/);
   const invitation = await visit("/schichten/1", { cookie: leni });
   assert.match(invitation.body, /Neue Halle/);

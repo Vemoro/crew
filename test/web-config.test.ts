@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clientAddress, webConfig } from "../src/server/web-config.ts";
+import { clientAddress, webConfig } from "../src/server/web-config";
 
 test("Lokaler Standard bleibt nutzbar und externe Instanzen brauchen HTTPS", () => {
   assert.deepEqual(webConfig({}), {

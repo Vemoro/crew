@@ -1,19 +1,21 @@
-import { chromium, webkit } from "playwright";
+import { chromium, webkit, type Locator, type Page } from "playwright";
 import { mkdirSync } from "node:fs";
 import { platform, release } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { createTestDatabase, startTestServer, stopTestServer } from "../test/runtime.ts";
-import { createPerson } from "../src/server/auth.ts";
-import { writeTransaction } from "../src/server/db.ts";
-import { checkEvidence } from "./browser-evidence.mjs";
-import { checkMobilePlanning } from "./browser-mobile.mjs";
-import { checkDisconnection, checkInstallability } from "./browser-pwa.mjs";
-import { checkAccessibility, checkMobileNavigation } from "./browser-accessibility.mjs";
+import { createTestDatabase, startTestServer, stopTestServer } from "../test/runtime";
+import { createPerson } from "../src/server/auth";
+import { writeTransaction } from "../src/server/db";
+import { checkEvidence } from "./browser-evidence";
+import { checkMobilePlanning } from "./browser-mobile";
+import { checkDisconnection, checkInstallability } from "./browser-pwa";
+import { checkAccessibility, checkMobileNavigation } from "./browser-accessibility";
+
+export type ShowScreenshot = (page: Page, name: string, fullPage?: boolean) => Promise<void>;
 
 const engine = process.env.CREW_BROWSER_ENGINE || "chromium";
+assert.ok(engine === "chromium" || engine === "webkit", "CREW_BROWSER_ENGINE muss chromium oder webkit sein.");
 const engines = { chromium, webkit };
-assert.ok(Object.hasOwn(engines, engine), "CREW_BROWSER_ENGINE muss chromium oder webkit sein.");
 const browser = await engines[engine].launch({ channel: engine === "chromium" ? process.env.CREW_BROWSER_CHANNEL : undefined, headless: true });
 console.log(`${engine} ${browser.version()}, ${platform()} ${release()}, Touch-Emulation bei 360 und 390 CSS-Pixeln.`);
 const database = await createTestDatabase();
@@ -29,10 +31,10 @@ const auditedViews = new Set(["personal-hell", "personal-dunkel", "personal-hand
   "dispo-hell", "dispo-dunkel", "einladung-390-dark", "einladung-390-light", "pdf-formatfehler",
   "navigation-handy-hell-offen", "navigation-handy-dunkel-offen"]);
 const desktopOverviews = new Set(["personal-hell", "personal-dunkel", "dispo-hell", "dispo-dunkel", "readme-personal-hell", "readme-personal-dunkel"]);
-const show = async (page, name, fullPage = true) => {
+const show: ShowScreenshot = async (page, name, fullPage = true) => {
   if (desktopOverviews.has(name)) await page.evaluate(() => window.scrollTo(0, 0));
   if (engine === "chromium" && auditedViews.has(name)) await checkAccessibility(page, name);
-  return page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
+  await page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
 };
 
 try {
@@ -42,11 +44,11 @@ try {
   await checkInstallability(staff, origin, engine);
   if (engine === "chromium") await checkAccessibility(staff, "Registrierung");
   const passwordField = staff.getByLabel("Passwort", { exact: true });
-  assert.equal(await passwordField.evaluate(field => document.getElementById(field.getAttribute("aria-describedby"))?.textContent),
+  assert.equal(await passwordField.evaluate(field => document.getElementById(field.getAttribute("aria-describedby") ?? "")?.textContent),
     "Mindestens 12 Zeichen.");
   if (engine === "webkit") await staff.getByRole("link", { name: "Zum Inhalt" }).focus();
   else await staff.keyboard.press("Tab");
-  assert.equal(await staff.evaluate(() => document.activeElement.textContent), "Zum Inhalt");
+  assert.equal(await staff.evaluate(() => document.activeElement?.textContent), "Zum Inhalt");
   await staff.keyboard.press("Enter");
   assert.equal(await staff.locator('.desktop-nav a[href="/registrieren"]').getAttribute('aria-current'), 'page');
   await staff.getByLabel("Name", { exact: true }).fill("Mira Nord");
@@ -114,7 +116,7 @@ try {
   await admin.getByText("Im Pool sichtbar", { exact: true }).waitFor();
   await staffMobile.goto(origin);
   const mobileMenu = staffMobile.getByText("Menü", { exact: true });
-  assert.ok((await mobileMenu.boundingBox()).height >= 44);
+  assert.ok(((await mobileMenu.boundingBox())?.height ?? 0) >= 44);
   await mobileMenu.click();
   await staffMobile.getByRole("link", { name: "Schichten", exact: true }).click();
   await staffMobile.getByRole("link", { name: "Schicht ansehen" }).click();
@@ -160,7 +162,7 @@ try {
   if (engine === "chromium") {
     for (const expected of ["Zum Inhalt", "Crew.", "Menü"]) {
       await staffMobile.keyboard.press("Tab");
-      assert.equal(await staffMobile.evaluate(() => document.activeElement.textContent.trim()), expected);
+      assert.equal(await staffMobile.evaluate(() => document.activeElement?.textContent?.trim()), expected);
     }
   }
   await staffMobile.locator("h1").click();
@@ -229,7 +231,7 @@ try {
   await staff.getByText("Schicht zurückgenommen", { exact: true }).waitFor();
   await admin.setViewportSize({ width: 1280, height: 900 });
   const cancelButton = staffMobile.getByRole("button", { name: "Einsatz absagen", exact: true });
-  assert.ok((await cancelButton.boundingBox()).height >= 44);
+  assert.ok(((await cancelButton.boundingBox())?.height ?? 0) >= 44);
   await cancelButton.click();
   const cancelDialog = staffMobile.getByRole("dialog", { name: "Einsatz absagen?" });
   await cancelDialog.getByText("Dein Platz wird wieder frei.", { exact: false }).waitFor();
@@ -276,7 +278,7 @@ try {
 
   const profile = admin.locator("#person-2");
   const profileToggle = profile.locator(":scope > details > summary");
-  async function openDetails(summary) {
+  async function openDetails(summary: Locator) {
     const details = summary.locator("..");
     if (await details.getAttribute("open") === null) await summary.press("Enter");
     await details.and(admin.locator("details[open]")).waitFor();

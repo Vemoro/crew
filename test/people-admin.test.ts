@@ -5,22 +5,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { nextPersonId } from "../src/server/auth.ts";
-import { shiftQuery } from "../src/server/planning.ts";
-import { submitQualification } from "../src/server/qualifications.ts";
-import { createTestDatabase, seedPerson } from "./runtime.ts";
+import { nextPersonId } from "../src/server/auth";
+import { shiftQuery } from "../src/server/planning";
+import { submitQualification } from "../src/server/qualifications";
+import { createTestDatabase, seedPerson } from "./runtime";
 
 test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält historische Besetzungszahlen", async t => {
   const directory = mkdtempSync(join(tmpdir(), "crew-personendaten-"));
   const database = await createTestDatabase();
   const db = database.pool;
-  const get = async (query) => (await db.query(query)).rows[0];
+  const get = async (query: string) => (await db.query(query)).rows[0];
   t.after(async () => {
     await database.close();
     rmSync(directory, { recursive: true, force: true });
   });
   const cli = fileURLToPath(new URL("../src/cli/people.ts", import.meta.url));
-  const call = (...args) => spawnSync(process.execPath, [cli, ...args], {
+  const call = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], {
     encoding: "utf8", env: { ...process.env, DATABASE_URL: database.url },
   });
   const mira = "mira@example.test";
@@ -33,9 +33,9 @@ test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält histor
     UPDATE people SET review_note='Lenis Notiz' WHERE id=2;
     UPDATE people SET review_note='Miras Notiz' WHERE id=3;
     INSERT INTO events (id,title,location) VALUES (1,'Stadtfest','Halle');`);
-  const slot = (id,title,starts,ends) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
+  const slot = (id: number, title: string, starts: string, ends: string) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
     VALUES ($1,1,$2,$3,$4,2,8000,'[]','["Rückfrage"]','invite')`, [id,title,starts,ends]);
-  const at = hours => new Date(Date.now() + hours * 3600000).toISOString();
+  const at = (hours: number) => new Date(Date.now() + hours * 3600000).toISOString();
   await slot(1, "Vergangen", at(-3), at(-2));
   await slot(2, "Laufend", at(-1), at(1));
   await slot(3, "Bevorstehend", at(2), at(3));
@@ -46,7 +46,7 @@ test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält histor
       SELECT auth_id,CASE WHEN id=3 THEN 'mira-session' ELSE 'leni-session' END,now()+interval '1 day' FROM people WHERE id IN (2,3);
     INSERT INTO qualification_requests VALUES (3,'stufe 2','Miras Nachforderung','submitted'),(2,'stufe 3','Lenis Nachforderung','open');`);
   const pdf = Buffer.from("%PDF-1.4\nMiras synthetischer Inhalt\n%%EOF\n");
-  const qualification = (...values) => db.query("INSERT INTO qualifications (id,person,name,evidence) VALUES ($1,$2,$3,$4)", values);
+  const qualification = (...values: [id: number, person: number, name: string, evidence: Buffer]) => db.query("INSERT INTO qualifications (id,person,name,evidence) VALUES ($1,$2,$3,$4)", values);
   await qualification(19, 3, "stufe 2", pdf);
   await qualification(18, 2, "stufe 3", Buffer.from("%PDF-1.4\nLenis synthetischer Inhalt\n%%EOF\n"));
 

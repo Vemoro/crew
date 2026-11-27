@@ -77,7 +77,7 @@ Die Anmeldebegrenzung zählt Versuche getrennt pro Client-IP und pro Konto. Ohne
 
 Mit `CREW_REGISTRATION=paused` nimmt Crew keine neuen Selbstregistrierungen an. Übernimm die Änderung mit `docker compose up -d` oder starte den nativen Prozess mit dem neuen Wert. Bestehende Konten können sich weiter anmelden. Setze den Wert auf `open` und übernimm die Änderung auf demselben Weg, um den Bewerberzugang wieder zu öffnen.
 
-`bun test test/proxy.test.js` prüft den synthetischen HTTPS-Proxy, die abgeschaltete Registrierung und die Anmeldebegrenzung auf einem lokalen Prüfstand. Die Probe benötigt OpenSSL, einen gebauten Crew-Stand und die PostgreSQL-Testverbindung `CREW_TEST_DATABASE_URL`. Unter Windows kann `CREW_OPENSSL` auf dessen ausführbare Datei zeigen.
+`bun test test/proxy.test.ts` prüft den synthetischen HTTPS-Proxy, die abgeschaltete Registrierung und die Anmeldebegrenzung auf einem lokalen Prüfstand. Die Probe benötigt OpenSSL, einen gebauten Crew-Stand und die PostgreSQL-Testverbindung `CREW_TEST_DATABASE_URL`. Unter Windows kann `CREW_OPENSSL` auf dessen ausführbare Datei zeigen.
 
 ## Crew als App installieren
 
