@@ -45,7 +45,13 @@ function Profile({ user, qualifications, evidenceFailure }: { user: Person; qual
       <Field title="Gültig bis (optional)">{control => <input {...control} name="validUntil" type="date"
         defaultValue={valueOf(evidenceFailure?.form, 'validUntil')}/>}</Field>
       <Field title="Nachweis als PDF" hint="Optional, bis 2 MB." error={evidenceFailure?.message}>{control =>
-        <input {...control} name="evidence" type="file" accept="application/pdf" autoFocus={Boolean(evidenceFailure)}/>}</Field>
+        <div className="file-picker">
+          <input {...control} name="evidence" type="file" accept="application/pdf" autoFocus={Boolean(evidenceFailure)}/>
+          <div className="file-picker-control" hidden>
+            <button type="button" className="quiet"><span id={`${control.id}-choose`}>Datei wählen</span></button>
+            <span className="muted" role="status">Keine Datei ausgewählt</span>
+          </div>
+        </div>}</Field>
       <Submit>Qualifikation einreichen</Submit></Form>}
   </Box>;
 }
@@ -98,7 +104,7 @@ export async function staffHome(db: Query, user: Person, timezone: string, evide
       render={shift => <><p><Status state={state(shift)}/></p>{state(shift) === 'interested' && shift.starts > now && <Form action="/absagen" secondary>
         <Hidden name="shift" value={shift.id}/><Hidden name="status" value="interested"/><Hidden name="revision" value={states.get(shift.id)!.revision}/>
         <Submit>Interesse zurückziehen</Submit></Form>}</>}/></Box>
-    <Box title="Aufgaben"><Requests entries={requests}/>{user.review_note && <p>{user.review_note}</p>}
+    <Box title="Aufgaben" id="aufgaben"><Requests entries={requests}/>{user.review_note && <p>{user.review_note}</p>}
       {tasks.length ? <ul>{tasks.map(task => <li key={task.id}>{task.text}</li>)}</ul> : <Empty>Für deine offenen Einsatzbewerbungen fehlen keine Qualifikationen.</Empty>}</Box>
     {profile}</> });
 }

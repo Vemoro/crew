@@ -28,7 +28,9 @@ mkdirSync(screenshotDirectory, { recursive: true });
 const auditedViews = new Set(["personal-hell", "personal-dunkel", "personal-handy-dunkel", "personal-handy-hell",
   "dispo-hell", "dispo-dunkel", "einladung-390-dark", "einladung-390-light", "pdf-formatfehler",
   "navigation-handy-hell-offen", "navigation-handy-dunkel-offen"]);
+const desktopOverviews = new Set(["personal-hell", "personal-dunkel", "dispo-hell", "dispo-dunkel", "readme-personal-hell", "readme-personal-dunkel"]);
 const show = async (page, name, fullPage = true) => {
+  if (desktopOverviews.has(name)) await page.evaluate(() => window.scrollTo(0, 0));
   if (engine === "chromium" && auditedViews.has(name)) await checkAccessibility(page, name);
   return page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
 };
@@ -54,6 +56,17 @@ try {
   await staff.getByRole("button", { name: "Bewerbung starten" }).click();
   await staff.getByText("In Prüfung", { exact: true }).waitFor();
   await checkEvidence(staff, show);
+  if (engine === "chromium") {
+    const noScript = await browser.newContext({ javaScriptEnabled: false, storageState: await desktop.storageState() });
+    try {
+      const fallback = await noScript.newPage();
+      await fallback.goto(origin);
+      await fallback.getByLabel("Nachweis als PDF", { exact: true }).waitFor();
+      assert.equal(await fallback.getByRole("button", { name: "Datei wählen" }).count(), 0);
+    } finally {
+      await noScript.close();
+    }
+  }
 
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", isMobile: true, deviceScaleFactor: 1, hasTouch: true, locale: "de-DE" });
   await mobile.addCookies(await desktop.cookies());
@@ -66,6 +79,11 @@ try {
   await admin.getByLabel("E-Mail-Adresse").fill("dispo@example.test");
   await admin.getByLabel("Passwort").fill(password);
   await admin.getByRole("button", { name: "Anmelden", exact: true }).click();
+  const adminNav = admin.getByRole("navigation", { name: "Hauptnavigation" });
+  await adminNav.getByRole("group", { name: "Personalpool" }).getByRole("link", { name: "Personal" }).waitFor();
+  await adminNav.getByRole("group", { name: "Einsatzplanung" }).getByRole("link", { name: "Einsätze" }).waitFor();
+  await adminNav.getByRole("group", { name: "Konto und Hilfe" }).getByRole("button", { name: "Abmelden" }).waitFor();
+  assert.equal(await adminNav.getByRole("link").first().textContent(), "Übersicht");
   await admin.getByText("Mira Nord", { exact: false }).first().click();
   await admin.getByLabel("Entscheidung").selectOption("active");
   await admin.getByRole("button", { name: "Entscheidung speichern" }).click();
@@ -140,7 +158,7 @@ try {
   await staffMobile.goto(origin);
   assert.ok(await staffMobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
   if (engine === "chromium") {
-    for (const expected of ["Zum Inhalt", "Crew.", "Abmelden", "Menü"]) {
+    for (const expected of ["Zum Inhalt", "Crew.", "Menü"]) {
       await staffMobile.keyboard.press("Tab");
       assert.equal(await staffMobile.evaluate(() => document.activeElement.textContent.trim()), expected);
     }
