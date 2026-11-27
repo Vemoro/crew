@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import { insertCredential, type Person } from './auth';
 import { first, writeTransaction, type Query } from './db';
 import { requireInput } from './inputs';
+import { ensureSchema } from './schema';
 
 // These columns are the stable Schema 6 interchange format. Session tables and credential metadata are never copied wholesale.
 const tables = {
@@ -56,6 +57,7 @@ export async function importSqlite(pool: Pool, path: string) {
       'Die SQLite-Quelle muss intakt sein und Crew-Schema 6 verwenden.');
     requireInput(!source.query('PRAGMA foreign_key_check').get(), 'Die SQLite-Quelle enthält ungültige Verknüpfungen.');
     await writeTransaction(pool, async db => {
+      await ensureSchema(db);
       requireInput(!await first(db, `SELECT 1 WHERE EXISTS (SELECT 1 FROM sqlite_import)
         OR EXISTS (SELECT 1 FROM people) OR EXISTS (SELECT 1 FROM events)
         OR EXISTS (SELECT 1 FROM erased_ids WHERE greatest<>0)`), 'Der PostgreSQL-Zielbestand muss leer sein.');

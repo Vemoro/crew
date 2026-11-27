@@ -47,12 +47,13 @@ test('SQLite-Import erhält Konten, Freigaben, Revisionen, Links, Zähler und PD
   const incompatible = importCommand();
   assert.equal(incompatible.status, 1);
   assert.match(incompatible.stderr, /Schema 6/);
-  assert.equal((await first<{ n: number }>(target.pool, 'SELECT count(*)::int AS n FROM people'))?.n, 0);
+  const schemaPresent = () => first(target.pool, "SELECT to_regclass('crew_schema') IS NOT NULL AS present");
+  assert.deepEqual(await schemaPresent(), { present: false });
   const invalid = new Database(path);
   invalid.exec("PRAGMA user_version=6; UPDATE people SET secret='invalid' WHERE id=9");
   invalid.close();
   await assert.rejects(importSqlite(target.pool, path), /Passwortbestand/);
-  assert.equal((await first<{ n: number }>(target.pool, 'SELECT count(*)::int AS n FROM people'))?.n, 0);
+  assert.deepEqual(await schemaPresent(), { present: false });
   const repair = new Database(path);
   repair.query('UPDATE people SET secret=? WHERE id=9').run(hash);
   repair.close();

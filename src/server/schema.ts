@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { writeTransaction } from './db';
+import { writeTransaction, type Query } from './db';
 
 const schema = `
 CREATE TABLE people (
@@ -84,14 +84,16 @@ CREATE TABLE auth_verifications (
 CREATE INDEX auth_verifications_identifier ON auth_verifications(identifier);
 `;
 
+export async function ensureSchema(db: Query) {
+  await db.query('CREATE TABLE IF NOT EXISTS crew_schema (version integer PRIMARY KEY)');
+  const result = await db.query<{ version: number }>('SELECT version FROM crew_schema');
+  if (result.rows.some(row => row.version !== 1)) throw new Error('Unbekannte Version des Crew-Datenbankschemas.');
+  if (result.rowCount === 0) {
+    await db.query(schema);
+    await db.query('INSERT INTO crew_schema VALUES (1)');
+  }
+}
+
 export async function migrate(pool: Pool) {
-  await writeTransaction(pool, async db => {
-    await db.query('CREATE TABLE IF NOT EXISTS crew_schema (version integer PRIMARY KEY)');
-    const result = await db.query<{ version: number }>('SELECT version FROM crew_schema');
-    if (result.rows.some(row => row.version !== 1)) throw new Error('Unbekannte Version des Crew-Datenbankschemas.');
-    if (result.rowCount === 0) {
-      await db.query(schema);
-      await db.query('INSERT INTO crew_schema VALUES (1)');
-    }
-  });
+  await writeTransaction(pool, ensureSchema);
 }
