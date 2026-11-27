@@ -14,9 +14,8 @@ import { checkAccessibility, checkMobileNavigation } from "./browser-accessibili
 export type ShowScreenshot = (page: Page, name: string, fullPage?: boolean) => Promise<void>;
 
 const engine = process.env.CREW_BROWSER_ENGINE || "chromium";
-assert.ok(engine === "chromium" || engine === "webkit", `Unbekannte Browser-Engine: ${engine}`);
+assert.ok(engine === "chromium" || engine === "webkit", "CREW_BROWSER_ENGINE muss chromium oder webkit sein.");
 const engines = { chromium, webkit };
-assert.ok(Object.hasOwn(engines, engine), "CREW_BROWSER_ENGINE muss chromium oder webkit sein.");
 const browser = await engines[engine].launch({ channel: engine === "chromium" ? process.env.CREW_BROWSER_CHANNEL : undefined, headless: true });
 console.log(`${engine} ${browser.version()}, ${platform()} ${release()}, Touch-Emulation bei 360 und 390 CSS-Pixeln.`);
 const database = await createTestDatabase();
