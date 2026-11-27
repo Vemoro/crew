@@ -25,6 +25,10 @@ matchMedia('(max-width: 44rem)').addEventListener('change', event => {
   if (!mobileMenu) return;
   mobileMenu.open = false;
   if (!mobileMenu.contains(focused)) return;
+  if (focused?.matches('.sign-out button')) {
+    desktopPanel?.querySelector<HTMLButtonElement>('.sign-out button')?.focus();
+    return;
+  }
   const href = focused instanceof HTMLAnchorElement ? focused.href : undefined;
   const desktopLinks = navigationLinks.filter(link => desktopPanel?.contains(link));
   const target = desktopLinks.find(link => link.href === href)

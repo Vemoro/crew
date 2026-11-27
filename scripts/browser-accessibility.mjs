@@ -39,4 +39,10 @@ export async function checkMobileNavigation(page, show) {
   await page.waitForFunction(() => document.activeElement?.matches('.desktop-nav a[href$="#profil"]'));
   await page.setViewportSize(viewport);
   await page.waitForFunction(() => document.activeElement?.matches('.mobile-nav summary'));
+  await summary.click();
+  await menu.getByRole('button', { name: 'Abmelden' }).focus();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForFunction(() => document.activeElement?.matches('.desktop-nav .sign-out button'));
+  await page.setViewportSize(viewport);
+  await page.waitForFunction(() => document.activeElement?.matches('.mobile-nav summary'));
 }

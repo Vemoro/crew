@@ -2,8 +2,9 @@ for (const picker of document.querySelectorAll('.file-picker')) {
   const input = picker.querySelector<HTMLInputElement>('input[type="file"]');
   const controls = picker.querySelector<HTMLElement>('.file-picker-control');
   const button = controls?.querySelector('button');
+  const title = button?.querySelector('span');
   const name = controls?.querySelector('[role="status"]');
-  if (!input || !controls || !button || !name) continue;
+  if (!input || !controls || !button || !title || !name) continue;
 
   const fieldId = input.id;
   const restoreFocus = document.activeElement === input || input.autofocus;
@@ -14,7 +15,11 @@ for (const picker of document.querySelectorAll('.file-picker')) {
     const value = input.getAttribute(attribute);
     if (value) button.setAttribute(attribute, value);
   }
-  const showFilename = () => { name.textContent = input.files?.[0]?.name ?? 'Keine Datei ausgewählt'; };
+  const showFilename = () => {
+    const file = input.files?.[0];
+    name.textContent = file?.name ?? 'Keine Datei ausgewählt';
+    title.textContent = file ? 'Andere Datei wählen' : 'Datei wählen';
+  };
   button.addEventListener('click', () => input.click());
   input.addEventListener('change', showFilename);
   showFilename();

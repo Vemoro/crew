@@ -28,7 +28,9 @@ mkdirSync(screenshotDirectory, { recursive: true });
 const auditedViews = new Set(["personal-hell", "personal-dunkel", "personal-handy-dunkel", "personal-handy-hell",
   "dispo-hell", "dispo-dunkel", "einladung-390-dark", "einladung-390-light", "pdf-formatfehler",
   "navigation-handy-hell-offen", "navigation-handy-dunkel-offen"]);
+const desktopOverviews = new Set(["personal-hell", "personal-dunkel", "dispo-hell", "dispo-dunkel", "readme-personal-hell", "readme-personal-dunkel"]);
 const show = async (page, name, fullPage = true) => {
+  if (desktopOverviews.has(name)) await page.evaluate(() => window.scrollTo(0, 0));
   if (engine === "chromium" && auditedViews.has(name)) await checkAccessibility(page, name);
   return page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
 };

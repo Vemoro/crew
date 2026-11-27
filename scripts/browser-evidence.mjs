@@ -25,6 +25,7 @@ export async function checkEvidence(staff, show) {
   const [chooser] = await Promise.all([staff.waitForEvent("filechooser"), choose.click()]);
   await chooser.setFiles({ name: "browsertest.pdf", mimeType: "application/pdf", buffer: contents });
   await staff.getByRole("status").filter({ hasText: "browsertest.pdf" }).waitFor();
+  await staff.getByRole("button", { name: "Nachweis als PDF Andere Datei wählen" }).waitFor();
   await submit.click();
   const link = staff.getByRole("link", { name: "PDF herunterladen" });
   await link.waitFor();
