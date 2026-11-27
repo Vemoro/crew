@@ -4,6 +4,8 @@
 
 Prüfe vor einer Änderung [Produktumfang](roadmap.md), Status, Auftrag und erwartetes Ergebnis. Suche nach vorhandenen Lösungen und Abhängigkeiten. Bei einem Fehler belege am relevanten Stand, was aktuell passiert. Bei einer Integration gilt die Version der vorgesehenen Schnittstelle. Halte offene Entscheidungen des Maintainers in Issue oder PR fest.
 
+Fehlt für einen neuen Bereich eine passende Crew-Vorgabe zu Gestaltung oder Code, prüfe vor der Umsetzung die einschlägige Regel und den vergleichbaren Aufrufweg in Desk und Haben. Halte im PR Quelle, geprüften Git-Stand und die nötige Crew-Anpassung fest. Dokumentiere auch, wenn die Prüfung kein passendes Vorbild ergibt. [Desk-Gestaltung](https://github.com/Vemoro/desk/blob/3e94e593ce2dea9962506700757d2685bec0593a/DESIGN.md) · [Haben-Gestaltung](https://github.com/Speicherstadt/haben/blob/e3ece9cbc19c4b649d35693fd13e27bbf49a1f3a/DESIGN.md)
+
 Arbeite pro Thema auf einem eigenen Branch gegen die passende Git-Basis. Änderungen an `main` kommen über freigegebene Pull Requests. Wenn eine Vorarbeit in einem offenen PR steckt, nenne dessen Nummer, Basis und Head. Fremde Änderungen bleiben geschützt. Bestehende Routen, Daten und Exportformate sind Bestandteil der Abnahme, wenn die Änderung sie berührt.
 
 Crew ist bis zur Freigabe von 0.1.0.0 privat. Behandle Repository, Git-Historie, Issues, PRs, Screenshots und Logs ab dem ersten Commit als zur Veröffentlichung vorgesehen. Verwende für Tests und Beispiele ausschließlich synthetische Daten. Zugangsdaten, personenbezogene Angaben und interne Infrastrukturdetails bleiben außerhalb dieser Flächen. Die Veröffentlichung folgt der [Release-Abnahme](release-abnahme.md).
@@ -16,11 +18,11 @@ Behandle gespeicherte Geldbeträge in ganzen Cent. Prüfe bei Schreibvorgängen 
 
 ### Codegröße und Aufräumen
 
-Eine Quelldatei hat einen fachlichen Schwerpunkt. Handgeschriebene JavaScript-, TypeScript- und CSS-Quelldateien bleiben bei höchstens 400 physischen Zeilen. Der Funktionsrumpf bleibt bei höchstens 80 Zeilen ohne Leerzeilen, gezählt nach Biomes Regel `noExcessiveLinesPerFunction`. Teile neue oder gewachsene Funktionen vor dem Merge entlang eines verständlichen Arbeitsschritts. Testdateien und der Browserprüflauf sind von den Codegrößenlimits ausgenommen. [Konventionen in Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/docs/entwicklung.md#konventionen)
+Eine Quelldatei hat einen fachlichen Schwerpunkt. Handgeschriebene JavaScript-, TypeScript- und CSS-Quelldateien bleiben bei höchstens 400 physischen Zeilen. Der Funktionsrumpf bleibt bei höchstens 80 Zeilen mit Code-Token. Reine Kommentar-, JSX-Text- und Zeichenketten-Fortsetzungszeilen bleiben außerhalb dieser Zählung. Teile längere Funktionen entlang eines verständlichen Arbeitsschritts. Testdateien, der Browserprüflauf, Deklarationsdateien und der generierte Router sind ausgenommen. [Desk-Größenregeln](https://github.com/Vemoro/desk/blob/3e94e593ce2dea9962506700757d2685bec0593a/docs/entwicklung.md#dateigröße-und-funktionslänge) · [Konventionen in Haben](https://github.com/Speicherstadt/haben/blob/e3ece9cbc19c4b649d35693fd13e27bbf49a1f3a/docs/entwicklung.md#konventionen)
 
 Räume überlange Funktionen, toten Code oder instabile Tests in den berührten Dateien auf, wenn das ohne größeren Umbau möglich ist. Ein Strukturumbau erhält bestehendes Verhalten. Nenne eine solche Änderung im PR. [Mitwirken bei Haben](https://github.com/Speicherstadt/haben/blob/34fff56798bdcb4b5b7f728cf38888b161f65094/docs/mitwirken.md#automatische-prüfungen-der-regeln)
 
-`bun install --frozen-lockfile` installiert die Abhängigkeiten. `bun run lint` prüft Datei- und Funktionslänge sowie das CSS-Abstandsraster. Eine zu große Datei oder ein fester Abstand außerhalb des Rasters lässt den Check fehlschlagen. Biome meldet lange Funktionen als Hinweis. Dieselbe Prüfung läuft in CI. Crew startet ohne Ausnahmeliste für Quelldateien oder Rasterwerte.
+`bun install --frozen-lockfile` installiert die Abhängigkeiten. `bun run lint` prüft Datei- und Funktionslänge sowie das CSS-Abstandsraster verbindlich. `bun run check:fields` prüft, ob sichtbare native Formularfelder ihre Attribute aus dem gemeinsamen `Field` beziehen. Beide Befehle laufen in CI und bei der Release-Abnahme. Crew verwendet die Grenzen ohne Übergangslisten.
 
 ## Issue-Review vor der Planung
 

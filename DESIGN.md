@@ -12,6 +12,16 @@ Crew orientiert sich an Habens Gestaltungsregeln. Definiere Farben zentral für 
 
 Verwende eine konsistente Icon-Komponente mit verständlichen Beschriftungen. Ein allein stehendes Symbol braucht einen zugänglichen Namen. Am Smartphone öffnet ein beschrifteter Menüknopf die Hauptnavigation. Der aktuelle Bereich bleibt erkennbar.
 
+### Navigation
+
+Beginne mit der für die Rolle passenden Übersicht. Gruppiere zusätzliche Arbeitsziele nach Aufgaben. Führe allgemeine Funktionen wie Konto, Erscheinungsbild, Dokumentation und Abmelden zusammen, sobald der Umfang eine eigene Seitenleiste rechtfertigt. Einstellungen für die Dispo bleiben an ihre Rolle gebunden. Ein Quellcode-Link führt zum ausgelieferten Stand, wenn dessen Adresse eingerichtet ist. Eine sichtbare Versionsnummer bezieht sich auf denselben Stand.
+
+Verwende für Fachlinks 14 Pixel, für Nebenaktionen 13 Pixel und für Gruppenüberschriften oder Versionsangaben 12 Pixel. In kurzen Fenstern bleibt die Navigation scrollbar. Mobile Menüziele sind mindestens 44 × 44 Pixel groß. Escape schließt das Menü und gibt den Fokus an den Auslöser zurück. Bei einer Navigation bleibt das Ziel erreichbar. Ein lokaler Sprung schließt das Menü und fokussiert den Hauptinhalt. Beim Wechsel zur Desktopansicht bleiben aktive Ansicht und Tastaturzugang erkennbar.
+
+## Raster und Schrift
+
+[`public/crew.css`](public/crew.css) ist die zentrale Quelle für Farbrollen, Schrift und Bedienelemente. Verwende Schriftstufen von 12, 13, 14, 16, 18, 24 oder 28 Pixel. Beschriftungen und Tabellenköpfe stehen in Satzschreibung. Beträge verwenden gleich breite Ziffern und stehen in Tabellen rechtsbündig. Kennungen und Code dürfen eine Festbreitenschrift verwenden. Knöpfe, Eingaben und Auswahllisten verwenden die gemeinsame Mindesthöhe. Der Fokusring steht an Knöpfen außen und an Eingabefeldern innen. Bewegungen berücksichtigen die Systemeinstellung für reduzierte Bewegung.
+
 ## Aktionen und Formulare
 
 Je Formular oder Aktionsgruppe gibt es eine hervorgehobene Hauptaktion. Bei einer gemeinsamen Knopfzeile steht sie am Ende. Nebenaktionen sind neutral. Eine Aktion mit bleibenden Folgen öffnet eine benannte Rückfrage zum betroffenen Objekt. Die Rückfrage enthält die konkrete Folge, einen eindeutigen Bestätigungsknopf und „Abbrechen“. Der Fokus beginnt aus Sicherheitsgründen bei „Abbrechen“. Escape schließt die Rückfrage ohne Änderung.
@@ -19,6 +29,13 @@ Je Formular oder Aktionsgruppe gibt es eine hervorgehobene Hauptaktion. Bei eine
 Baue Felder und Auswahllisten mit der gemeinsamen Feldstruktur. Jedes Feld hat ein zugängliches Label. Hinweise und Fehler gehören an das betroffene Feld oder den betroffenen Abschnitt und bleiben bei der Korrektur sichtbar. Erhalte die Eingaben, soweit der Vorgang das zulässt. Eine Hauptaktion bleibt bei lückenhaften Eingaben erreichbar, damit die Validierung erklärt, was fehlt.
 
 Anordnung und Tab-Reihenfolge stimmen überein. Fokusmarkierungen, Texte und Bedienelemente brauchen ausreichenden Kontrast in beiden Themes. Normale Knöpfe und Formularfelder sind auf Touchgeräten mindestens 44 Pixel hoch.
+
+### Voraussetzungen, Felder und Auswahl
+
+- Verwende `Field` für sichtbare Eingaben, Auswahllisten und mehrzeilige Felder. Der Name gehört in ein eigenes zugeordnetes Label. Hinweise und Fehler stehen daneben und werden über `aria-describedby` zugeordnet. Setze `aria-invalid`, wenn ein Fehler einem Feld zugeordnet ist. Bei zusammengehörigen Kästchen oder Optionen benennt eine Legende die Gruppe. Versteckte IDs und Revisionen kommen ohne sichtbare Felder aus.
+- Eingabefehler halten die Hauptaktion erreichbar. Die Prüfung beim Absenden zeigt den Fehler beim Feld und führt zum ersten korrigierbaren Feld. Öffne dabei einen eingeklappten Bereich bei Bedarf. Erhalte korrigierbare Eingaben. Ein fachlicher Sperrgrund steht bei der Aktion und verweist auf einen für die Rolle erreichbaren Lösungsweg. Laufende Vorgänge benennen ihre Phase, Ladefehler bieten bei wiederholbaren Vorgängen einen erneuten Versuch an.
+- Kleine feste Listen verwenden native Auswahlelemente. Wachsende Listen wie Poolmitglieder verwenden bei Bedarf eine durchsuchbare Auswahl mit unterscheidbaren Treffern. Tastatur, Touch, leere Treffer und Abbruch gehören zur Abnahme. Bietet eine Aufgabe mehrere Wege, benennt der Menüknopf die Aufgabe. Entscheidungen mit verschiedenen Folgen können in einem Dialog erklärt werden. Vorübergehend gesperrte Optionen zeigen ihren Grund am jeweiligen Eintrag.
+- Dateiauswahl verwendet den nativen Dateidialog und zeigt gewählte Namen vor dem Absenden. Ein eigenständiger Sofort-Upload ist eine benannte Aktion mit Rückmeldung über Fortschritt oder Ergebnis.
 
 ## Aufbau von Arbeitsbereichen
 
@@ -29,6 +46,30 @@ Anordnung und Tab-Reihenfolge stimmen überein. Fokusmarkierungen, Texte und Bed
 - Karten gruppieren zusammengehörige Inhalte mit neutraler Oberfläche, Rand und feinem Schatten. Hat ein Dialog die Kartenhülle bereits selbst, braucht sein Formular keinen weiteren Rahmen. Leere Listen nennen knapp, was dort erscheint und welche Aktion zum ersten Eintrag führt.
 - Fachzustände verwenden die gemeinsame Statusdarstellung mit kurzem Text und optionalem farbigem Punkt. Bei Entwürfen kann der Punkt als Ring erscheinen. Ein kurzer Zusatz erklärt bei Bedarf den nächsten Schritt oder ein relevantes Datum. Merkmale wie eine Rolle oder ein Tag erhalten eine eigene neutrale Darstellung.
 
+### Seitenköpfe, Karte und Leerstand
+
+Ein vergleichbarer Seitenkopf steht vor dem Arbeitsinhalt und zeigt Titel, Zustand und wichtigste Aktion. Fixierte Kopf- oder Aktionsleisten lassen den angesprungenen oder fokussierten Inhalt sichtbar. Ein echter Leerstand beschreibt, was hier entsteht. Falls die Rolle anlegen darf, führt er zur Aktion. Leere Filterergebnisse nennen den Filter und bieten das Zurücksetzen an. Gewählte Karten zeigen Auswahl und Fokus getrennt. Kennzahlen nennen Einheit oder Zeitraum, wenn die Bedeutung sonst offen ist.
+
+### Listen und Tabellen
+
+Häufige Aktionen stehen am Ende der Zeile und bleiben direkt erreichbar. Seltene Aktionen können ein gemeinsames Menü nutzen. Bei derselben Aktionsgruppe steht eine gefährliche Daueraktion vorn und die Hauptaktion am Ende. Inhaltslinks gehören zu ihrer Zelle. Symbolaktionen brauchen bei mehreren gleichartigen Zeilen einen zugänglichen Namen mit Objektbezug. Escape gibt den Fokus an den Menüauslöser zurück. Verschwindet eine Zeile, erhält ein sinnvoller Nachfolger den Fokus. Mobil bleiben Bezeichnung, Wert und Aktionen zugeordnet. Eingebettete Knöpfe und Menüs liegen außerhalb eines anklickbaren Zeilenlinks.
+
+### Status und Handlungsbedarf
+
+Wartezustände bleiben visuell ruhig. Kennzeichne akuten Handlungsbedarf wie eine gesperrte Besetzung oder einen fehlgeschlagenen Vorgang mit verständlichem Text. Farbe und Punkt unterstützen die Bezeichnung. Rolle und Kategorie bleiben Merkmale. Ein Hinweis mit genau einer Aktion verwendet eine neutrale Aktion bei seinem Text.
+
+### Dialoge auf kleinen Bildschirmen
+
+Bewahre Titel und Aktionsbereich beim Scrollen gut erreichbar. Prüfe Dialoge mit kurzer Bildschirmhöhe und eingeblendeter Tastatur. Bestätigungen für bleibende Folgen nennen das Objekt und die Folge. „Abbrechen“ erhält den ersten Fokus. Eine gegebenenfalls angebotene Wischgeste hat dieselbe Wirkung wie Abbrechen. Bei einem Bestätigungsblatt am unteren Rand bleibt die sichere Bildschirmkante frei. Die sichtbare Reihenfolge und die Tab-Reihenfolge stimmen überein.
+
+### Einstellungen, Schritte und Suche
+
+- Wenn Einstellungen wachsen, gruppiere sie nach Aufgaben. Am Desktop können Bereichsliste und Inhalt nebeneinander stehen. Am Smartphone gehören der sichtbare Rückweg, Direktlinks, Neuladen und Browser-Zurück zur Abnahme. Beim Öffnen fokussiert der Bereichstitel, beim Rückweg der bisher gewählte Eintrag.
+- Eine geführte Aufgabe mit fester Reihenfolge verwendet eine geordnete Liste und `aria-current="step"`. Ein Text kennzeichnet erledigte Schritte. Frei wechselbare Bewerbungs- und Schichtzustände bleiben als fachliche Zustände erkennbar.
+- Neue Tastenkürzel stehen im zugehörigen Auslöser und verwenden erreichbare Tasten der jeweiligen Plattform. Eingaben und geöffnete Dialoge behalten Vorrang. Eine künftige globale Suche berücksichtigt Rollen und zeigt Treffer mit verständlichem Kontext.
+
 ## Oberfläche prüfen
 
 Prüfe die Änderung mit Tastatur sowie auf der betroffenen Bildschirmgröße. Neue Ansichten erhalten einen Browserfall, der Erreichbarkeit und wesentliche Bedienung abdeckt. Prüfe zugängliche Namen, Reihenfolge und Dialogfokus nach WCAG 2.2 AA, Hell und Dunkel sowie bei mobiler Bedienung auf dem Smartphone. Warte im Browser auf den beobachteten Zustand. Bei Änderungen am Aussehen gehören reproduzierbare Vergleichsbilder ins Review. Der [Screenshot-Ablauf](.agents/skills/crew-pr-screenshots/SKILL.md) beschreibt die Aufnahme.
+
+`bun run check:fields` prüft `Field` und die Weitergabe seiner Attribute. Chromium prüft ausgewählte Anmeldungs-, Personal-, Dispo-, Menü-, Dialog- und Fehlerzustände mit Axe. Der Lauf ergänzt die Sicht- und Tastaturprüfung. Prüfe bei Formularänderungen zusätzlich den Zugang zum ersten Fehler und seine Behebung. [Crew-Layout](.agents/skills/crew-layout/SKILL.md)

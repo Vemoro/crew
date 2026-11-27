@@ -36,7 +36,9 @@ jobs:
       - name: Crew prüfen
         run: bun run test
       - name: Codegröße und Abstandsraster prüfen
-        run: bun run lint
+        run: |
+          bun run lint
+          bun run check:fields
       - name: Browser bereitstellen
         run: bunx playwright install --with-deps chromium webkit
       - name: Bedienung in Chromium prüfen

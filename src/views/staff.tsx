@@ -3,7 +3,7 @@ import type { Person } from '../server/auth';
 import { first, rows, type Query } from '../server/db';
 import { canSee, missingQualifications, shiftQuery, type Reply, type Shift } from '../server/planning';
 import type { Qualification, QualificationRequest } from '../server/qualifications';
-import { Alert, Box, Confirmation, Empty, Form, Hidden, Label, Qualifications, Requests, ShiftFacts, Status,
+import { Alert, Box, Confirmation, Empty, Form, Hidden, Field, Qualifications, Requests, ShiftFacts, Status,
   Submit, money, page, valueOf, type StatusName } from './ui';
 
 export function authView(path: string, registrationOpen: boolean, failure?: { message: string; form?: FormData }) {
@@ -13,10 +13,12 @@ export function authView(path: string, registrationOpen: boolean, failure?: { me
     {registering && <p>Die Dispo prüft deine Bewerbung. Den Status und deine Nachweise siehst du anschließend im Portal.</p>}
     {path === '/registrieren' && !registrationOpen && <p>Die Selbstregistrierung ist derzeit pausiert.</p>}
     <Alert message={failure?.message}/><Form action={registering ? '/registrieren' : '/anmelden'}>
-      {registering && <Label title="Name"><input name="name" autoComplete="name" defaultValue={valueOf(failure?.form,'name')} required maxLength={100}/></Label>}
-      <Label title="E-Mail-Adresse"><input type="email" name="email" autoComplete="email" defaultValue={valueOf(failure?.form,'email')} required/></Label>
-      <Label title="Passwort"><input name="password" type="password" autoComplete={registering ? 'new-password' : 'current-password'} required maxLength={128}/></Label>
-      {registering && <Label title="Verfügbarkeit"><textarea name="availability" maxLength={1000} defaultValue={valueOf(failure?.form,'availability')}/></Label>}
+      {registering && <Field title="Name">{control => <input {...control} name="name" autoComplete="name" defaultValue={valueOf(failure?.form,'name')} required maxLength={100}/>}</Field>}
+      <Field title="E-Mail-Adresse">{control => <input {...control} type="email" name="email" autoComplete="email" defaultValue={valueOf(failure?.form,'email')} required/>}</Field>
+      <Field title="Passwort" hint={registering ? 'Mindestens 12 Zeichen.' : undefined}>{control =>
+        <input {...control} name="password" type="password" autoComplete={registering ? 'new-password' : 'current-password'}
+          required minLength={registering ? 12 : undefined} maxLength={128}/>}</Field>
+      {registering && <Field title="Verfügbarkeit">{control => <textarea {...control} name="availability" maxLength={1000} defaultValue={valueOf(failure?.form,'availability')}/>}</Field>}
       <Submit>{registering ? 'Bewerbung starten' : 'Anmelden'}</Submit>
     </Form></div> });
 }
@@ -31,14 +33,15 @@ export async function loadRequests(db: Query, person: number) {
 
 function Profile({ user, qualifications }: { user: Person; qualifications: Qualification[] }) {
   return <Box title="Profil und Qualifikationen" id="profil">
-    <Form action="/verfuegbarkeit"><Label title="Typische Verfügbarkeit oder Hinweis"><textarea name="availability" maxLength={1000} defaultValue={user.availability}/></Label>
+    <Form action="/verfuegbarkeit"><Field title="Typische Verfügbarkeit oder Hinweis">{control => <textarea {...control} name="availability" maxLength={1000} defaultValue={user.availability}/>}</Field>
       <Submit>Verfügbarkeit speichern</Submit></Form>
     <Qualifications entries={qualifications}/>
     {user.status !== 'rejected' && <Form action="/qualifikation" multipart>
       <h3>Qualifikation einreichen oder erneuern</h3><p className="muted">Wenn du dieselbe Bezeichnung verwendest, ersetzt du den bisherigen Eintrag. Die Dispo prüft den neuen Stand.</p>
-      <Label title="Bezeichnung"><input name="name" maxLength={100} required/></Label>
-      <Label title="Gültig bis (optional)"><input name="validUntil" type="date"/></Label>
-      <Label title="Nachweis als PDF (optional, bis 2 MB)"><input name="evidence" type="file" accept="application/pdf"/></Label>
+      <Field title="Bezeichnung">{control => <input {...control} name="name" maxLength={100} required/>}</Field>
+      <Field title="Gültig bis (optional)">{control => <input {...control} name="validUntil" type="date"/>}</Field>
+      <Field title="Nachweis als PDF" hint="Optional, bis 2 MB.">{control =>
+        <input {...control} name="evidence" type="file" accept="application/pdf"/>}</Field>
       <Submit>Qualifikation einreichen</Submit></Form>}
   </Box>;
 }
@@ -111,7 +114,7 @@ export async function shiftView(db: Query, user: Person, id: number, timezone: s
     {response && response.status !== 'withdrawn' ? <p><Status state={response.status}/></p> : missing.length
       ? <Box title="Vor der Bewerbung erforderlich"><p>{missing.join(', ')}</p><a href="/#profil">Qualifikationen ansehen</a></Box>
       : <Box title="Für die Schicht bewerben"><Form action="/interesse"><Hidden name="shift" value={id}/>
-        {questions.map((question, index) => <Label title={question} key={index}><textarea name="answer" maxLength={2000} required
-          defaultValue={typeof answers[index] === 'string' ? answers[index].slice(0,2000) : ''}/></Label>)}
+        {questions.map((question, index) => <Field title={question} key={index}>{control => <textarea {...control} name="answer" maxLength={2000} required
+          defaultValue={typeof answers[index] === 'string' ? answers[index].slice(0,2000) : ''}/>}</Field>)}
         <Submit>Interesse melden</Submit></Form></Box>}</> });
 }
