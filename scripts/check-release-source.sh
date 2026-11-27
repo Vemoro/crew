@@ -4,11 +4,11 @@ set -euo pipefail
 package=$(cd "$1" && pwd)
 temp_root=$(cd "${TMPDIR:-/tmp}" && pwd -P)
 workspace=$(mktemp -d "$temp_root/crew-package.XXXXXX")
-server_pid=
+project="crew-package-$(bun -e 'console.log(crypto.randomUUID().slice(0, 8))')"
+compose_file=
 cleanup() {
-  if [[ -n "$server_pid" ]]; then
-    kill "$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
+  if [[ -n "$compose_file" ]]; then
+    docker compose -f "$compose_file" -p "$project" down -v --remove-orphans --rmi local
   fi
   case "$(cd "$workspace" && pwd -P)" in
     "$temp_root"/crew-package.*) rm -rf -- "$workspace" ;;
@@ -33,19 +33,24 @@ test -f LICENSE
 test -f CHANGELOG.md
 test -f docs/installation.md
 
-crew_password=$(node -e 'console.log(require("node:crypto").randomBytes(24).toString("hex"))')
-export CREW_DB="$workspace/crew.sqlite"
-CREW_ADMIN_PASSWORD="$crew_password" npm run admin -- dispo@example.test "Crew Dispo"
-crew_port=${CREW_SMOKE_PORT:-42688}
-crew_origin="http://127.0.0.1:$crew_port"
-PORT="$crew_port" HOST=127.0.0.1 CREW_ORIGIN="$crew_origin" node server.js > "$workspace/server.log" 2>&1 &
-server_pid=$!
-curl --fail --silent --show-error --retry 5 --retry-all-errors --max-time 5 "$crew_origin/ready" >/dev/null
-kill -0 "$server_pid"
-CREW_ORIGIN="$crew_origin" CREW_SMOKE_PASSWORD="$crew_password" node --input-type=module - <<'NODE'
+crew_password=$(bun -e 'console.log(crypto.randomUUID())')
+export CREW_DB_PASSWORD="$(bun -e 'console.log(crypto.randomUUID())')"
+export CREW_AUTH_SECRET="$(bun -e 'console.log(crypto.randomUUID())')"
+export CREW_ORIGIN=http://localhost:8080
+export CREW_PORT=0
+export CREW_REGISTRATION=paused
+export CREW_TRUSTED_PROXY=
+compose_file="$PWD/compose.yaml"
+docker compose -f "$compose_file" -p "$project" up --build -d
+crew_address="http://$(docker compose -f "$compose_file" -p "$project" port crew 8080)"
+curl --fail --silent --show-error --retry 5 --retry-all-errors --max-time 5 "$crew_address/ready" >/dev/null
+CREW_ADMIN_PASSWORD="$crew_password" docker compose -f "$compose_file" -p "$project" run --rm \
+  -e CREW_ADMIN_PASSWORD crew bun run admin dispo@example.test "Crew Dispo"
+CREW_SMOKE_ADDRESS="$crew_address" CREW_SMOKE_PASSWORD="$crew_password" bun - <<'BUN'
 import assert from 'node:assert/strict';
 const origin = process.env.CREW_ORIGIN;
-const response = await fetch(origin + '/anmelden', {
+const address = process.env.CREW_SMOKE_ADDRESS;
+const response = await fetch(address + '/anmelden', {
   method: 'POST',
   headers: { origin },
   redirect: 'manual',
@@ -54,6 +59,6 @@ const response = await fetch(origin + '/anmelden', {
 assert.equal(response.status, 303);
 assert.equal(response.headers.get('location'), '/dispo');
 const cookie = response.headers.get('set-cookie').split(';')[0];
-const panel = await fetch(origin + '/dispo', { headers: { cookie } });
+const panel = await fetch(address + '/dispo', { headers: { cookie } });
 assert.match(await panel.text(), /Personal und Einsätze/);
-NODE
+BUN

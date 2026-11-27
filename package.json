@@ -5,18 +5,39 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "engines": {
-    "node": ">=24.14.0 <25"
-  },
+  "packageManager": "bun@1.4.5",
+  "engines": { "bun": "1.4.5" },
   "scripts": {
-    "start": "node server.js",
-    "admin": "node admin.js",
-    "lint": "node scripts/check-source.mjs && biome lint --diagnostic-level=info",
-    "test": "node --test",
-    "test:browser": "node scripts/check-browser.mjs"
+    "build:assets": "bun build src/client/dialogs.ts src/client/pwa.ts src/client/service-worker.ts --target=browser --outdir public",
+    "build": "bun run build:assets && bun --bun vite build",
+    "dev": "bun run build:assets && bun --bun vite dev",
+    "start": "bun .output/server/index.mjs",
+    "migrate": "bun src/cli/migrate.ts",
+    "admin": "bun src/cli/admin.ts",
+    "people": "bun src/cli/people.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "bun scripts/check-source.mjs && biome lint --diagnostic-level=info",
+    "test": "bun test --timeout 30000 test",
+    "test:browser": "bun scripts/check-browser.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
-    "playwright": "1.65.1"
+    "@types/bun": "1.4.5",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "nitro": "3.0.261103-rc",
+    "playwright": "1.65.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.0"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.7",
+    "better-auth": "1.7.16",
+    "pg": "8.23.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
   }
 }

@@ -4,12 +4,32 @@ services:
     ports:
       - "127.0.0.1:${CREW_PORT:-8080}:8080"
     environment:
+      CREW_AUTH_SECRET: ${CREW_AUTH_SECRET:?CREW_AUTH_SECRET fehlt}
       CREW_ORIGIN: ${CREW_ORIGIN:-http://localhost:8080}
       CREW_REGISTRATION: ${CREW_REGISTRATION:-open}
       CREW_TRUSTED_PROXY: ${CREW_TRUSTED_PROXY:-}
       TZ: ${TZ:-Europe/Berlin}
+      PGHOST: postgres
+      PGDATABASE: crew
+      PGUSER: crew
+      PGPASSWORD: ${CREW_DB_PASSWORD:?CREW_DB_PASSWORD fehlt}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: crew
+      POSTGRES_USER: crew
+      POSTGRES_PASSWORD: ${CREW_DB_PASSWORD:?CREW_DB_PASSWORD fehlt}
     volumes:
-      - crew-data:/app/data
+      - crew-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crew -d crew"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
     restart: unless-stopped
 volumes:
-  crew-data:
+  crew-postgres:

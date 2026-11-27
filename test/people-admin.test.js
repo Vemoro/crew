@@ -5,43 +5,50 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { nextPersonId, nextQualificationId, openDatabase, shiftQuery } from "../model.js";
+import { nextPersonId } from "../src/server/auth.ts";
+import { shiftQuery } from "../src/server/planning.ts";
+import { submitQualification } from "../src/server/qualifications.ts";
+import { createTestDatabase, seedPerson } from "./runtime.ts";
 
-test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält historische Besetzungszahlen", t => {
+test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält historische Besetzungszahlen", async t => {
   const directory = mkdtempSync(join(tmpdir(), "crew-personendaten-"));
-  const database = join(directory, "crew.sqlite");
-  const db = openDatabase(database);
-  t.after(() => {
-    db.close();
+  const database = await createTestDatabase();
+  const db = database.pool;
+  const get = async (query) => (await db.query(query)).rows[0];
+  t.after(async () => {
+    await database.close();
     rmSync(directory, { recursive: true, force: true });
   });
-  const cli = fileURLToPath(new URL("../people-admin.js", import.meta.url));
+  const cli = fileURLToPath(new URL("../src/cli/people.ts", import.meta.url));
   const call = (...args) => spawnSync(process.execPath, [cli, ...args], {
-    encoding: "utf8", env: { ...process.env, CREW_DB: database },
+    encoding: "utf8", env: { ...process.env, DATABASE_URL: database.url },
   });
   const mira = "mira@example.test";
   const output = join(directory, "export");
-  const person = db.prepare("INSERT INTO people (id,email,name,secret,role,status,review_note) VALUES (?,?,?,?,?,?,?)");
-  person.run(1, "dispo@example.test", "Dispo", "dispo-hash", "admin", "active", "");
-  person.run(2, "leni@example.test", "Leni Anders", "leni-hash", "staff", "active", "Lenis Notiz");
-  person.run(3, mira, "Mira Nord", "mira-hash", "staff", "active", "Miras Notiz");
-  person.run(4, "noa@example.test", "Noa", "noa-hash", "staff", "rejected", "");
-  db.exec("INSERT INTO events (id,title,location) VALUES (1,'Stadtfest','Halle')");
-  const slot = db.prepare(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
-    VALUES (?,1,?,?,?,2,8000,'[]','["Rückfrage"]','invite')`);
+  await seedPerson(db, "dispo@example.test", "Dispo", "synthetic-dispo-password", "admin");
+  await seedPerson(db, "leni@example.test", "Leni Anders", "synthetic-leni-password");
+  await seedPerson(db, mira, "Mira Nord", "synthetic-mira-password");
+  await seedPerson(db, "noa@example.test", "Noa", "synthetic-noa-password");
+  await db.query(`UPDATE people SET status='rejected' WHERE id=4;
+    UPDATE people SET review_note='Lenis Notiz' WHERE id=2;
+    UPDATE people SET review_note='Miras Notiz' WHERE id=3;
+    INSERT INTO events (id,title,location) VALUES (1,'Stadtfest','Halle');`);
+  const slot = (id,title,starts,ends) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
+    VALUES ($1,1,$2,$3,$4,2,8000,'[]','["Rückfrage"]','invite')`, [id,title,starts,ends]);
   const at = hours => new Date(Date.now() + hours * 3600000).toISOString();
-  slot.run(1, "Vergangen", at(-3), at(-2));
-  slot.run(2, "Laufend", at(-1), at(1));
-  slot.run(3, "Bevorstehend", at(2), at(3));
-  db.exec(`INSERT INTO responses (shift,person,status,answers) VALUES
+  await slot(1, "Vergangen", at(-3), at(-2));
+  await slot(2, "Laufend", at(-1), at(1));
+  await slot(3, "Bevorstehend", at(2), at(3));
+  await db.query(`INSERT INTO responses (shift,person,status,answers) VALUES
       (1,3,'assigned','["Miras Antwort"]'),(1,2,'assigned','["Lenis Antwort"]'),(2,3,'assigned','[]'),(3,3,'assigned','[]');
     INSERT INTO invitations VALUES (1,3),(2,3),(3,3),(1,2);
-    INSERT INTO sessions VALUES ('mira-session',3,9999999999),('leni-session',2,9999999999);
+    INSERT INTO auth_sessions ("userId",token,"expiresAt")
+      SELECT auth_id,CASE WHEN id=3 THEN 'mira-session' ELSE 'leni-session' END,now()+interval '1 day' FROM people WHERE id IN (2,3);
     INSERT INTO qualification_requests VALUES (3,'stufe 2','Miras Nachforderung','submitted'),(2,'stufe 3','Lenis Nachforderung','open');`);
   const pdf = Buffer.from("%PDF-1.4\nMiras synthetischer Inhalt\n%%EOF\n");
-  const qualification = db.prepare("INSERT INTO qualifications (id,person,name,evidence) VALUES (?,?,?,?)");
-  qualification.run(19, 3, "stufe 2", pdf);
-  qualification.run(18, 2, "stufe 3", Buffer.from("%PDF-1.4\nLenis synthetischer Inhalt\n%%EOF\n"));
+  const qualification = (...values) => db.query("INSERT INTO qualifications (id,person,name,evidence) VALUES ($1,$2,$3,$4)", values);
+  await qualification(19, 3, "stufe 2", pdf);
+  await qualification(18, 2, "stufe 3", Buffer.from("%PDF-1.4\nLenis synthetischer Inhalt\n%%EOF\n"));
 
   const exported = call("export", mira, output);
   assert.equal(exported.status, 0, exported.stderr);
@@ -61,40 +68,45 @@ test("Der Betreiber exportiert und bereinigt genau ein Profil und erhält histor
   assert.equal(existsSync(unknown), false);
 
   const erase = () => call("erase", mira, "3");
-  const counts = tables => tables.map(table => db.prepare(`SELECT count(*) AS n FROM ${table} WHERE person=3`).get().n);
-  const tables = ["responses", "sessions", "qualifications", "invitations", "qualification_requests"];
+  const counts = () => Promise.all([
+    ...["responses", "qualifications", "invitations", "qualification_requests"]
+      .map(table => get(`SELECT count(*)::int AS n FROM ${table} WHERE person=3`)),
+    get(`SELECT count(*)::int AS n FROM auth_sessions WHERE token='mira-session'`),
+  ]).then(results => results.map(row => row.n));
   assert.match(call("inspect", mira).stdout, /Profil-ID: 3/);
   assert.equal(call("erase", mira, "2").status, 1);
   assert.equal(call("erase", "dispo@example.test", "1").status, 1);
   const preflight = erase();
   assert.equal(preflight.status, 1);
   assert.match(preflight.stderr, /Schicht #2.*Schicht #3/);
-  assert.deepEqual(counts(tables), [3, 1, 1, 3, 1]);
-  db.exec(`UPDATE responses SET status='withdrawn',released_by_dispo=1 WHERE shift=3 AND person=3;
+  assert.deepEqual(await counts(), [3, 1, 3, 1, 1]);
+  await db.query(`UPDATE responses SET status='withdrawn',released_by_dispo=1 WHERE shift=3 AND person=3;
     UPDATE shifts SET starts='2000-01-01T00:00:00.000Z',ends='2000-01-01T01:00:00.000Z' WHERE id=2;
-    CREATE TRIGGER simulate_failure BEFORE DELETE ON people WHEN old.id=3 BEGIN SELECT RAISE(ABORT, 'synthetischer Fehler'); END;`);
+    CREATE FUNCTION simulate_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetischer Fehler'; END; $$;
+    CREATE TRIGGER simulate_failure BEFORE DELETE ON people FOR EACH ROW WHEN (old.id=3) EXECUTE FUNCTION simulate_failure();`);
   assert.equal(erase().status, 1);
-  assert.deepEqual(counts(tables), [3, 1, 1, 3, 1]);
-  assert.equal(db.prepare("SELECT sum(anonymous_assigned) AS n FROM shifts").get().n, 0);
+  assert.deepEqual(await counts(), [3, 1, 3, 1, 1]);
+  assert.equal((await get("SELECT sum(anonymous_assigned)::int AS n FROM shifts")).n, 0);
 
-  db.exec("DROP TRIGGER simulate_failure; UPDATE people SET access_suspended=1 WHERE id=3");
+  await db.query("DROP TRIGGER simulate_failure ON people; UPDATE people SET access_suspended=1 WHERE id=3");
   const removed = erase();
   assert.equal(removed.status, 0, removed.stderr);
-  assert.deepEqual(counts(tables), [0, 0, 0, 0, 0]);
-  assert.equal(db.prepare("SELECT 1 FROM people WHERE id=3").get(), undefined);
-  const before = db.prepare(shiftQuery + " WHERE s.id=1").get();
+  assert.deepEqual(await counts(), [0, 0, 0, 0, 0]);
+  assert.equal(await get("SELECT 1 FROM people WHERE id=3"), undefined);
+  const before = (await get(shiftQuery + " WHERE s.id=1"));
   assert.equal(before.filled, 2);
   assert.equal(before.anonymous_assigned, 1);
   assert.equal(erase().status, 0);
-  assert.equal(db.prepare(shiftQuery + " WHERE s.id=1").get().filled, 2);
-  assert.equal(db.prepare("SELECT count(*) AS n FROM sessions WHERE person=2").get().n, 1);
+  assert.equal((await get(shiftQuery + " WHERE s.id=1")).filled, 2);
+  assert.equal((await get("SELECT count(*)::int AS n FROM auth_sessions WHERE token='leni-session'")).n, 1);
   assert.equal(call("erase", "noa@example.test", "4").status, 0);
-  assert.equal(db.prepare(`SELECT ${nextPersonId} AS person,${nextQualificationId} AS qualification`).get().person, 5);
-  assert.equal(db.prepare(`SELECT ${nextQualificationId} AS qualification`).get().qualification, 20);
-  assert.equal(db.prepare("SELECT count(*) AS n FROM people WHERE role='staff'").get().n, 1);
-  person.run(5, mira, "Neues Profil", "neu-hash", "staff", "pending", "");
+  assert.equal((await get(`SELECT ${nextPersonId} AS person`)).person, 5);
+  await submitQualification(db, 2, "neuer Nachweis", "", null);
+  assert.equal((await get("SELECT max(id) AS qualification FROM qualifications")).qualification, 20);
+  assert.equal((await get("SELECT count(*)::int AS n FROM people WHERE role='staff'")).n, 1);
+  await seedPerson(db, mira, "Neues Profil", "synthetic-new-mira-password");
   const staleErase = erase();
   assert.equal(staleErase.status, 1);
   assert.match(staleErase.stderr, /Profil-ID stimmt nicht/);
-  assert.equal(db.prepare("SELECT name FROM people WHERE id=5").get().name, "Neues Profil");
+  assert.equal((await get("SELECT name FROM people WHERE id=5")).name, "Neues Profil");
 });

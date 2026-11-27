@@ -7,8 +7,7 @@ import { createServer as createProxy, request as httpsRequest } from "node:https
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { openDatabase, passwordHash } from "../model.js";
-import { createApp } from "../server.js";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
 
 test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { timeout: 30_000 }, async t => {
   const folder = mkdtempSync(join(tmpdir(), "crew-proxy-test-"));
@@ -19,15 +18,11 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
     "-days", "1", "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
     "-keyout", keyPath, "-out", certPath], { stdio: "ignore", windowsHide: true });
   const cert = readFileSync(certPath);
-  const db = openDatabase(":memory:");
-  t.after(() => db.close());
+  const database = await createTestDatabase();
   const password = "synthetic-proxy-password";
-  const secret = passwordHash(password);
-  const insert = db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,?,'active')");
-  insert.run("dispo@example.test", "Crew Dispo", secret, "admin");
-  insert.run("mira@example.test", "Mira", secret, "staff");
-
-  let upstreamPort;
+  await seedPerson(database.pool, "dispo@example.test", "Crew Dispo", password, "admin");
+  await seedPerson(database.pool, "mira@example.test", "Mira", password);
+  const upstreamPort = 42696;
   const proxy = createProxy({ key: readFileSync(keyPath), cert }, (req, res) => {
     const forward = httpRequest({ hostname: "127.0.0.1", port: upstreamPort, path: req.url, method: req.method,
       headers: { ...req.headers, "x-forwarded-for": req.socket.remoteAddress } }, response => {
@@ -41,11 +36,11 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   await once(proxy, "listening");
   t.after(() => new Promise(resolve => proxy.close(resolve)));
   const origin = `https://127.0.0.1:${proxy.address().port}`;
-  const crew = createApp({ db, origin, trustedProxy: "127.0.0.1", registrationOpen: false });
-  crew.listen(0, "127.0.0.1");
-  await once(crew, "listening");
-  upstreamPort = crew.address().port;
-  t.after(() => new Promise(resolve => crew.close(resolve)));
+  const crew = await startTestServer(database.url, origin, "paused", "127.0.0.1", upstreamPort);
+  t.after(async () => {
+    await stopTestServer(crew);
+    await database.close();
+  });
 
   const browser = (path, options = {}) => send(httpsRequest, origin + path, { ca: cert, origin, ...options });
   const paused = await browser("/registrieren");
@@ -54,7 +49,7 @@ test("HTTPS-Proxy begrenzt Clients getrennt und pausiert Registrierungen", { tim
   assert.doesNotMatch(paused.html, /action="\/registrieren"/);
   const registration = await browser("/registrieren", { data: { email: "neu@example.test", password, name: "Neu" } });
   assert.equal(registration.status, 422);
-  assert.equal(db.prepare("SELECT count(*) AS count FROM people").get().count, 2);
+  assert.equal((await database.pool.query("SELECT count(*)::int AS count FROM people")).rows[0].count, 2);
 
   const badOrigin = await browser("/anmelden", { origin: "https://fremd.example.test", data: { email: "dispo@example.test", password } });
   assert.equal(badOrigin.status, 422);

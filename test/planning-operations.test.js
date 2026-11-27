@@ -1,36 +1,31 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import { test } from "node:test";
-import { openDatabase, passwordHash, shiftQuery } from "../model.js";
-import { createApp } from "../server.js";
+import { shiftQuery } from "../src/server/planning.ts";
+import { createTestDatabase, startTestServer, stopTestServer, seedPerson } from "./runtime.ts";
 
 test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz und nimmt die Schicht zurück", async t => {
-  const db = openDatabase(":memory:");
-  const origin = "http://localhost:8080";
+  const database = await createTestDatabase();
+  const db = database.pool;
+  t.after(database.close);
   const password = "synthetic-planning-password";
-  const secret = passwordHash(password);
-  db.prepare(`INSERT INTO people (id,email,name,secret,role,status) VALUES
-    (1,'dispo@example.test','Dispo',?,'admin','active'),(2,'mira@example.test','Mira',?,'staff','active'),
-    (3,'leni@example.test','Leni',?,'staff','active'),(4,'andi@example.test','Andi',?,'staff','active')`)
-    .run(secret, secret, secret, secret);
-  db.exec("INSERT INTO events (id,title,location,instructions) VALUES (1,'Stadtfest','Alte Halle','Tor 1')");
-  const slot = db.prepare(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
-    VALUES (?,1,?,?,?,1,?,'[]','[]','invite')`);
+  await seedPerson(db, "dispo@example.test", "Dispo", password, "admin");
+  await seedPerson(db, "mira@example.test", "Mira", password);
+  await seedPerson(db, "leni@example.test", "Leni", password);
+  await seedPerson(db, "andi@example.test", "Andi", password);
+  await db.query("INSERT INTO events (id,title,location,instructions) VALUES (1,'Stadtfest','Alte Halle','Tor 1')");
+  const slot = (id, title, starts, ends, cents) => db.query(`INSERT INTO shifts (id,event,title,starts,ends,slots,cents,requirements,questions,visibility)
+    VALUES ($1,1,$2,$3,$4,1,$5,'[]','[]','invite')`, [id,title,starts,ends,cents]);
   const at = hours => new Date(Date.now() + hours * 3600000).toISOString();
-  slot.run(1, "Aufbau", at(24), at(25), 8000);
-  slot.run(2, "Abbau", at(25), at(26), 4500);
-  slot.run(3, "Vorbereitung", at(-3), at(-2), 0);
-  slot.run(4, "Einlass", at(-1), at(1), 0);
-  db.exec(`INSERT INTO invitations VALUES (1,2),(2,2),(1,3);
+  await slot(1, "Aufbau", at(24), at(25), 8000);
+  await slot(2, "Abbau", at(25), at(26), 4500);
+  await slot(3, "Vorbereitung", at(-3), at(-2), 0);
+  await slot(4, "Einlass", at(-1), at(1), 0);
+  await db.query(`INSERT INTO invitations VALUES (1,2),(2,2),(1,3);
     INSERT INTO responses (shift,person,status,answers) VALUES (1,2,'assigned','[]'),(2,2,'assigned','[]'),(3,2,'assigned','[]');`);
-  const server = createApp({ db, origin });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  t.after(async () => {
-    await new Promise(resolve => server.close(resolve));
-    db.close();
-  });
-  const base = `http://127.0.0.1:${server.address().port}`;
+  const origin = "http://127.0.0.1:42692";
+  const base = origin;
+  const server = await startTestServer(database.url, origin);
+  t.after(() => stopTestServer(server));
   async function visit(path, { cookie, data, expected = 200 } = {}) {
     const response = await fetch(base + path, { method: data ? "POST" : "GET", redirect: "manual",
       headers: { origin, ...(cookie ? { Cookie: cookie } : {}) }, body: data && new URLSearchParams(data) });
@@ -52,8 +47,8 @@ test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz un
   assert.match(staleCorrection.body, /Zur Korrektur mit der Fehlermeldung/);
   assert.match(staleCorrection.body, /<li>Aufbau ·[^<]+<\/li><li>Abbau ·[^<]+<\/li>/);
   assert.doesNotMatch(staleCorrection.body, /<li>(Vorbereitung|Einlass) ·/);
-  const byId = db.prepare(shiftQuery + " WHERE s.id=?");
-  assert.deepEqual([1, 2, 3, 4].map(id => byId.get(id).location), ["Neue Halle", "Neue Halle", "Alte Halle", "Alte Halle"]);
+  const byId = async id => (await db.query(shiftQuery + " WHERE s.id=$1", [id])).rows[0];
+  assert.deepEqual(await Promise.all([1, 2, 3, 4].map(async id => (await byId(id)).location)), ["Neue Halle", "Neue Halle", "Alte Halle", "Alte Halle"]);
   assert.match((await visit("/", { cookie: mira })).body, /Tor 4/);
   const invitation = await visit("/schichten/1", { cookie: leni });
   assert.match(invitation.body, /Neue Halle/);
@@ -75,7 +70,7 @@ test("Dispo korrigiert künftige Schichten, besetzt einen freigegebenen Platz un
   await visit("/dispo/einladen", { cookie: admin, data: { shift: 1, person: 4 }, expected: 422 });
   await visit("/dispo/einladen", { cookie: admin, data: { shift: 2, person: 4 }, expected: 303 });
   await visit("/dispo/einladen", { cookie: admin, data: { shift: 2, person: 4 }, expected: 303 });
-  assert.equal(byId.get(2).placement_revision, 2);
+  assert.equal((await byId(2)).placement_revision, 2);
   await visit("/dispo/schicht-zuruecknehmen", { cookie: admin, data: { shift: 2, revision: 1 }, expected: 422 });
   await visit("/interesse", { cookie: mira, data: { shift: 1 }, expected: 422 });
   const cancelled = (await visit("/", { cookie: leni })).body;

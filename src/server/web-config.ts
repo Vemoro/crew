@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
 
-export function canonicalAddress(value) {
+export function canonicalAddress(value: unknown) {
   if (typeof value !== "string") return "";
   const address = value.trim().toLowerCase();
   const family = isIP(address);
@@ -13,13 +13,13 @@ export function canonicalAddress(value) {
   return [high >> 8, high & 255, low >> 8, low & 255].join(".");
 }
 
-export function clientAddress(req, trustedProxy) {
-  const peer = canonicalAddress(req.socket.remoteAddress);
+export function clientAddress(headers: Headers, peerAddress: string | undefined, trustedProxy: string) {
+  const peer = canonicalAddress(peerAddress);
   if (!trustedProxy || peer !== trustedProxy) return peer;
-  return canonicalAddress(req.headers["x-forwarded-for"]) || peer;
+  return canonicalAddress(headers.get("x-forwarded-for")) || peer;
 }
 
-export function webConfig(env) {
+export function webConfig(env: NodeJS.ProcessEnv) {
   const port = Number(env.PORT || 8080);
   const host = env.HOST || "127.0.0.1";
   const address = new URL(env.CREW_ORIGIN || `http://localhost:${port}`);

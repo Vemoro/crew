@@ -1,11 +1,11 @@
 import { chromium, webkit } from "playwright";
-import { once } from "node:events";
 import { mkdirSync } from "node:fs";
 import { platform, release } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { createApp } from "../server.js";
-import { openDatabase, passwordHash } from "../model.js";
+import { createTestDatabase, startTestServer, stopTestServer } from "../test/runtime.ts";
+import { createPerson } from "../src/server/auth.ts";
+import { writeTransaction } from "../src/server/db.ts";
 import { checkEvidence } from "./browser-evidence.mjs";
 import { checkMobilePlanning } from "./browser-mobile.mjs";
 import { checkDisconnection, checkInstallability } from "./browser-pwa.mjs";
@@ -15,16 +15,13 @@ const engines = { chromium, webkit };
 assert.ok(Object.hasOwn(engines, engine), "CREW_BROWSER_ENGINE muss chromium oder webkit sein.");
 const browser = await engines[engine].launch({ channel: engine === "chromium" ? process.env.CREW_BROWSER_CHANNEL : undefined, headless: true });
 console.log(`${engine} ${browser.version()}, ${platform()} ${release()}, Touch-Emulation bei 360 und 390 CSS-Pixeln.`);
-const db = openDatabase(":memory:");
+const database = await createTestDatabase();
 const password = "synthetic-browser-password";
-db.prepare("INSERT INTO people (email,name,secret,role,status) VALUES (?,?,?,'admin','active')")
-  .run("dispo@example.test", "Crew Dispo", passwordHash(password));
+const hash = await Bun.password.hash(password);
+await writeTransaction(database.pool, db => createPerson(db, "dispo@example.test", "Crew Dispo", hash, "admin"));
 const port = Number(process.env.CREW_BROWSER_PORT || 42671);
 const origin = `http://127.0.0.1:${port}`;
-const app = createApp({ db, origin });
-let runningApp = app;
-app.listen(port, "127.0.0.1");
-await once(app, "listening");
+let runningApp = await startTestServer(database.url, origin);
 const screenshotDirectory = process.env.CREW_SCREENSHOTS || (engine === "chromium" ? "build/screenshots" : "build/webkit");
 mkdirSync(screenshotDirectory, { recursive: true });
 const show = (page, name, fullPage = true) => page.screenshot({ path: join(screenshotDirectory, name + ".png"), fullPage });
@@ -302,11 +299,9 @@ try {
   const writer = await desktop.newPage();
   await writer.goto(origin);
   await writer.getByLabel("Typische Verfügbarkeit oder Hinweis").fill("Darf offline nicht gespeichert werden");
-  await new Promise(resolve => app.close(resolve));
+  await stopTestServer(runningApp);
   await checkDisconnection(staff, writer, origin, show);
-  runningApp = createApp({ db, origin, registrationOpen: false });
-  runningApp.listen(port, "127.0.0.1");
-  await once(runningApp, "listening");
+  runningApp = await startTestServer(database.url, origin, "paused");
   await staff.getByRole("link", { name: "Crew erneut öffnen" }).click();
   await staff.getByRole("heading", { name: "Hallo, Mira Nord" }).waitFor();
   assert.equal(await availability.inputValue(), originalAvailability);
@@ -327,6 +322,6 @@ try {
   console.log("Browser: Kernablauf, PDF, schmale Dispo, PWA, Verbindungsabbruch und pausierte Registrierung geprüft.");
 } finally {
   await browser.close();
-  await new Promise(resolve => runningApp.close(resolve));
-  db.close();
+  await stopTestServer(runningApp);
+  await database.close();
 }

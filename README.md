@@ -36,22 +36,24 @@ Beim fiktiven **Stadtfest West** organisiert die Dispo den Aufbau am Nachmittag 
 | **Disposition** | Einsätze mit mehreren Schichten planen, schichtbezogene Fragen festlegen, Plätze verbindlich besetzen und Änderungen bearbeiten. |
 | **Personalportal** | Offene und eingeladene Schichten sehen, Interesse melden, Zusagen einsehen, Nachweise einreichen und eigene Einteilungen absagen. |
 | **Vergütung** | Pauschalen je Schicht hinterlegen und die Summe der erwarteten Vergütung aus bestätigten Schichten anzeigen. |
-| **Betrieb** | Crew mit Docker Compose oder Node.js betreiben, SQLite-Bestände sichern und wiederherstellen sowie einzelne Poolprofile exportieren und bereinigen. |
+| **Betrieb** | Crew mit Docker Compose oder Bun betreiben, PostgreSQL-Bestände sichern und wiederherstellen sowie einzelne Poolprofile exportieren und bereinigen. |
 
 Crew läuft eigenständig und kann externe Einsatzreferenzen aufnehmen. Schnittstellen zu Desk und Haben, Ist-Zeiten, Abrechnungsbelege, Urlaub und Benachrichtigungen sind spätere Ausbaustufen. [Roadmap](docs/roadmap.md)
 
 ## Schnellstart
 
-Starte im ausgepackten Quellstand oder Checkout. Das Beispiel nutzt Bash und Docker Compose. Wähle ein eigenes Passwort mit 12 bis 128 Zeichen ohne Zeilenumbruch. Für einen lokalen Test genügen synthetische Personen und Schichten.
+Starte im ausgepackten Quellstand oder Checkout. Das Beispiel nutzt Bash und Docker Compose. Wähle ein eigenes Passwort mit 12 bis 128 Zeichen ohne Zeilenumbruch. Für einen lokalen Test genügen synthetische Personen und Schichten. Lege für länger laufende Instanzen Datenbankpasswort und Sitzungsschlüssel dauerhaft in einer geschützten Umgebung ab.
 
 ```sh
-docker compose build
+export CREW_DB_PASSWORD="$(openssl rand -hex 32)"
+export CREW_AUTH_SECRET="$(openssl rand -hex 32)"
+docker compose up --build -d
+docker compose exec crew bun run migrate
 read -r -s -p 'Passwort für die Dispo eingeben: ' CREW_ADMIN_PASSWORD
 printf '\n'
 export CREW_ADMIN_PASSWORD
-docker compose run --rm -e CREW_ADMIN_PASSWORD crew node admin.js dispo@example.test "Crew Dispo"
+docker compose run --rm -e CREW_ADMIN_PASSWORD crew bun run admin dispo@example.test "Crew Dispo"
 unset CREW_ADMIN_PASSWORD
-docker compose up -d
 ```
 
 Öffne `http://localhost:8080` und melde dich als Dispo an. Registriere in einem zweiten Browserprofil eine synthetische Person, nimm sie in den Pool auf und besetze mit ihr die erste Schicht. [Nativer Start, HTTPS und App-Installation](docs/installation.md) · [Sicherung](docs/sicherung.md) · [Personendaten](docs/personendaten.md)

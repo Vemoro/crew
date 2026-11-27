@@ -10,39 +10,41 @@ permissions:
 jobs:
   crew:
     runs-on: ubuntu-latest
+    env:
+      CREW_TEST_DATABASE_URL: postgres://postgres:synthetic-ci-test@127.0.0.1:5432/postgres
+      TZ: Europe/Berlin
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: synthetic-ci-test
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '24'
-      - name: Syntax prüfen
+          bun-version: '1.4.5'
+      - name: Abhängigkeiten, Build und Typprüfung
         run: |
-          for source in *.js public/*.js test/*.js scripts/*.mjs; do
-            node --check "$source"
-          done
+          bun install --frozen-lockfile
+          bun run build
+          bun run typecheck
       - name: Crew prüfen
-        env:
-          TZ: Europe/Berlin
-        run: npm test
-      - name: HTTPS-Proxy und Registrierung prüfen
-        run: node scripts/check-proxy.mjs
+        run: bun run test
       - name: Codegröße und Abstandsraster prüfen
-        run: |
-          npm ci
-          npm run lint
+        run: bun run lint
       - name: Browser bereitstellen
-        run: npx playwright install --with-deps chromium webkit
+        run: bunx playwright install --with-deps chromium webkit
       - name: Bedienung in Chromium prüfen
-        env:
-          TZ: Europe/Berlin
-        run: npm run test:browser
+        run: bun run test:browser
       - name: Bedienung in WebKit prüfen
         env:
-          TZ: Europe/Berlin
           CREW_BROWSER_ENGINE: webkit
-        run: npm run test:browser
+        run: bun run test:browser
       - name: Ansichten bereitstellen
         uses: actions/upload-artifact@v4
         with:
@@ -56,7 +58,7 @@ jobs:
       - name: Container bauen
         run: docker build -t crew-ci .
       - name: Sicherung und Wiederherstellung prüfen
-        run: node scripts/check-restore.mjs
+        run: bun scripts/check-restore.mjs
       - name: Quellpaket prüfen
         run: |
           set -euo pipefail

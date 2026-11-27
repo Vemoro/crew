@@ -5,3 +5,8 @@ data
 build
 node_modules
 test
+.output
+.tanstack
+public/dialogs.js
+public/pwa.js
+public/service-worker.js
