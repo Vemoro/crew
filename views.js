@@ -26,9 +26,12 @@ function page(user, title, content, registrationOpen = true) {
   return `<!doctype html><html lang="de"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${esc(title)} · Crew</title><link rel="stylesheet" href="/crew.css">
+    <meta name="theme-color" content="#30231d"><link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg"><link rel="apple-touch-icon" href="/icon-180.png">
+    <script src="/pwa.js" type="module"></script>
     ${user ? '<script src="/dialogs.js" type="module"></script>' : ""}</head><body>
     <a href="#inhalt" class="skip">Zum Inhalt</a>
-    <header><div class="header-inner"><a class="brand" href="${admin ? "/dispo" : "/"}">Crew<span aria-hidden="true">.</span></a>
+    <header><div class="header-inner"><a class="brand" href="${admin ? "/dispo" : "/"}"><img src="/icon.svg" alt="" width="28" height="28">Crew<span aria-hidden="true">.</span></a>
     <nav class="desktop-nav" aria-label="Hauptnavigation">${nav}</nav>
     ${user ? post("/abmelden", button("Abmelden"), 'class="sign-out"') : ""}
     <details class="mobile-nav"><summary>Menü</summary><nav aria-label="Hauptnavigation">${nav}</nav></details></div></header>

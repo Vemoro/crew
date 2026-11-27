@@ -56,7 +56,8 @@ main { padding-block: 32px 64px; }
 a { color: var(--accent); text-underline-offset: .22em; }
 header a, header details > summary { color: var(--nav-text); }
 header a:hover { color: var(--nav-accent); }
-.brand { font-weight: 750; font-size: 24px; text-decoration: none; letter-spacing: -.04em; padding-right: 8px; }
+.brand { display: inline-flex; align-items: center; font-weight: 750; font-size: 24px; text-decoration: none; letter-spacing: -.04em; padding-right: 8px; }
+.brand img { margin-inline-end: 8px; }
 .brand span { color: var(--nav-accent); }
 .skip { position: absolute; top: 0; transform: translateY(-120%); background: var(--surface); padding: 8px; }
 .skip:focus { transform: none; }
@@ -130,6 +131,7 @@ header :focus-visible { outline-color: var(--nav-accent); }
   .overview { grid-template-columns: 1fr; }
 }
 @media (pointer: coarse) {
+  .brand { min-height: 44px; }
   input, textarea, select, button, summary { min-height: 44px; }
   summary { padding-block: 8px; }
 }
