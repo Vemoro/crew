@@ -42,7 +42,7 @@ Crew läuft eigenständig und kann externe Einsatzreferenzen aufnehmen. Schnitts
 
 ## Schnellstart
 
-Starte im ausgepackten Quellstand oder Checkout. Das Beispiel nutzt Bash und Docker Compose. Wähle ein eigenes Passwort mit mindestens zwölf Zeichen. Für einen lokalen Test genügen synthetische Personen und Schichten.
+Starte im ausgepackten Quellstand oder Checkout. Das Beispiel nutzt Bash und Docker Compose. Wähle ein eigenes Passwort mit 12 bis 128 Zeichen ohne Zeilenumbruch. Für einen lokalen Test genügen synthetische Personen und Schichten.
 
 ```sh
 docker compose build
@@ -68,7 +68,7 @@ Ja. Unterstützte Browser installieren Crew als Web-App. Das Personalportal und 
 
 **Was bedeutet der Vergütungsbetrag im Personalportal?**
 
-Er ist die Summe der hinterlegten Pauschalen für die dort bestätigten bevorstehenden Schichten. Mit einer Absage oder Platzfreigabe ändert sich die Erwartung. Abrechnung und Lohnlauf erfolgen außerhalb von Crew.
+Er ist die Summe der hinterlegten Pauschalen für bestätigte Schichten, die noch nicht beendet sind. Mit einer Absage oder Platzfreigabe ändert sich die Erwartung. Abrechnung und Lohnlauf erfolgen außerhalb von Crew.
 
 ## Mitwirken
 
