@@ -52,7 +52,7 @@ Beim fiktiven **Stadtfest West** schreibt die Dispo den Aufbau für den Personal
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/ansichten/personalportal-dunkel.png">
-  <img src="docs/ansichten/personalportal-hell.png" alt="Das Personalportal zeigt Miras bestätigte Aufbauschicht, 80 Euro erwartete Vergütung und die Einladung zum Abbau." width="960">
+  <img src="docs/ansichten/personalportal-hell.png" alt="Crew-Personalportal mit gruppierter Seitenleiste, Miras bestätigter Aufbauschicht, 80 Euro erwarteter Vergütung und der Einladung zum Abbau." width="960">
 </picture>
 
 [Personalportal hell](docs/ansichten/personalportal-hell.png) · [Personalportal dunkel](docs/ansichten/personalportal-dunkel.png)
